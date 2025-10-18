@@ -1,0 +1,348 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "aba4e242-4395-44a6-944a-12d206fa60ea"
+    },
+    {
+      "content": "Classify the function : HAL_PWREx_ControlVoltageScaling",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "2bdf1de5-d77e-43a4-9925-cfe89051ccbd",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `HAL_PWREx_ControlVoltageScaling` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_yWngW7iWcC0Mta7MFQ0iG4VJ",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_PWREx_ControlVoltageScaling\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 62,
+          "prompt_tokens": 1675,
+          "total_tokens": 1737,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 11
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--6cbd8109-ee88-4bd2-a343-4682564e49bd-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_PWREx_ControlVoltageScaling"
+          },
+          "id": "call_00_yWngW7iWcC0Mta7MFQ0iG4VJ",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1675,
+        "output_tokens": 62,
+        "total_tokens": 1737,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', location_line=476, function_content='/**\\n* @brief Configures the main internal regulator output voltage.\\n* @param  VoltageScaling specifies the regulator output voltage to achieve\\n*         a tradeoff between performance and power consumption.\\n*          This parameter can be one of the following values:\\n*            @arg PWR_REGULATOR_VOLTAGE_SCALE1: Regulator voltage output range 1 mode,\\n*                                                typical output voltage at 1.4 V,\\n*                                                system frequency up to 216 MHz.\\n*            @arg PWR_REGULATOR_VOLTAGE_SCALE2: Regulator voltage output range 2 mode,\\n*                                                typical output voltage at 1.2 V,\\n*                                                system frequency up to 180 MHz.\\n*            @arg PWR_REGULATOR_VOLTAGE_SCALE3: Regulator voltage output range 2 mode,\\n*                                                typical output voltage at 1.00 V,\\n*                                                system frequency up to 151 MHz.\\n* @note To update the system clock frequency(SYSCLK):\\n*        - Set the HSI or HSE as system clock frequency using the HAL_RCC_ClockConfig().\\n*        - Call the HAL_RCC_OscConfig() to configure the PLL.\\n*        - Call HAL_PWREx_ConfigVoltageScaling() API to adjust the voltage scale.\\n*        - Set the new system clock frequency using the HAL_RCC_ClockConfig().\\n* @note The scale can be modified only when the HSI or HSE clock source is selected\\n*        as system clock source, otherwise the API returns HAL_ERROR.\\n* @note When the PLL is OFF, the voltage scale 3 is automatically selected and the VOS bits\\n*       value in the PWR_CR1 register are not taken in account.\\n* @note This API forces the PLL state ON to allow the possibility to configure the voltage scale 1 or 2.\\n* @note The new voltage scale is active only when the PLL is ON.\\n* @retval HAL Status\\n*/\\nHAL_StatusTypeDef HAL_PWREx_ControlVoltageScaling(uint32_t VoltageScaling)\\n{\\n  uint32_t tickstart = 0;\\n\\n  assert_param(IS_PWR_REGULATOR_VOLTAGE(VoltageScaling));\\n\\n  /* Enable Power ctrl clock */\\n  __HAL_RCC_PWR_CLK_ENABLE();\\n\\n  /* Check if the PLL is used as system clock or not */\\n  if(__HAL_RCC_GET_SYSCLK_SOURCE() != RCC_CFGR_SWS_PLL)\\n  {\\n    /* Disable the main PLL */\\n    __HAL_RCC_PLL_DISABLE();\\n    \\n    /* Get Start Tick */\\n    tickstart = HAL_GetTick();    \\n    /* Wait till PLL is disabled */  \\n    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) != RESET)\\n    {\\n      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)\\n      {\\n        return HAL_TIMEOUT;\\n      }\\n    }\\n    \\n    /* Set Range */\\n    __HAL_PWR_VOLTAGESCALING_CONFIG(VoltageScaling);\\n    \\n    /* Enable the main PLL */\\n    __HAL_RCC_PLL_ENABLE();\\n    \\n    /* Get Start Tick */\\n    tickstart = HAL_GetTick();\\n    /* Wait till PLL is ready */  \\n    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET)\\n    {\\n      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)\\n      {\\n        return HAL_TIMEOUT;\\n      } \\n    }\\n    \\n    /* Get Start Tick */\\n    tickstart = HAL_GetTick();\\n    while((__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY) == RESET))\\n    {\\n      if((HAL_GetTick() - tickstart ) > PWR_VOSRDY_TIMEOUT_VALUE)\\n      {\\n        return HAL_TIMEOUT;\\n      } \\n    }\\n  }\\n  else\\n  {\\n    return HAL_ERROR;\\n  }\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'476': 'HAL_StatusTypeDef HAL_PWREx_ControlVoltageScaling(uint32_t VoltageScaling)', '477': '{', '478': '  uint32_t tickstart = 0;', '479': '', '480': '  assert_param(IS_PWR_REGULATOR_VOLTAGE(VoltageScaling));', '481': '', '482': '  /* Enable Power ctrl clock */', '483': '  __HAL_RCC_PWR_CLK_ENABLE();', '484': '', '485': '  /* Check if the PLL is used as system clock or not */', '486': '  if(__HAL_RCC_GET_SYSCLK_SOURCE() != RCC_CFGR_SWS_PLL)', '487': '  {', '488': '    /* Disable the main PLL */', '489': '    __HAL_RCC_PLL_DISABLE();', '490': '    ', '491': '    /* Get Start Tick */', '492': '    tickstart = HAL_GetTick();    ', '493': '    /* Wait till PLL is disabled */  ', '494': '    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) != RESET)', '495': '    {', '496': '      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)', '497': '      {', '498': '        return HAL_TIMEOUT;', '499': '      }', '500': '    }', '501': '    ', '502': '    /* Set Range */', '503': '    __HAL_PWR_VOLTAGESCALING_CONFIG(VoltageScaling);', '504': '    ', '505': '    /* Enable the main PLL */', '506': '    __HAL_RCC_PLL_ENABLE();', '507': '    ', '508': '    /* Get Start Tick */', '509': '    tickstart = HAL_GetTick();', '510': '    /* Wait till PLL is ready */  ', '511': '    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET)', '512': '    {', '513': '      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)', '514': '      {', '515': '        return HAL_TIMEOUT;', '516': '      } ', '517': '    }', '518': '    ', '519': '    /* Get Start Tick */', '520': '    tickstart = HAL_GetTick();', '521': '    while((__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY) == RESET))', '522': '    {', '523': '      if((HAL_GetTick() - tickstart ) > PWR_VOSRDY_TIMEOUT_VALUE)', '524': '      {', '525': '        return HAL_TIMEOUT;', '526': '      } ', '527': '    }', '528': '  }', '529': '  else', '530': '  {', '531': '    return HAL_ERROR;', '532': '  }', '533': '  return HAL_OK;', '534': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "1c1dc6e3-2bef-4484-b2ec-4097803dda9f",
+      "tool_call_id": "call_00_yWngW7iWcC0Mta7MFQ0iG4VJ",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_IvztHuVfH8BCCJt2TP2XeBrr",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_PWREx_ControlVoltageScaling\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 47,
+          "prompt_tokens": 3549,
+          "total_tokens": 3596,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 1821
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--96236ba8-db90-42a0-abeb-3233fb65cb8f-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_PWREx_ControlVoltageScaling"
+          },
+          "id": "call_00_IvztHuVfH8BCCJt2TP2XeBrr",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3549,
+        "output_tokens": 47,
+        "total_tokens": 3596,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', location_line=476, function_content='/**\\n* @brief Configures the main internal regulator output voltage.\\n* @param  VoltageScaling specifies the regulator output voltage to achieve\\n*         a tradeoff between performance and power consumption.\\n*          This parameter can be one of the following values:\\n*            @arg PWR_REGULATOR_VOLTAGE_SCALE1: Regulator voltage output range 1 mode,\\n*                                                typical output voltage at 1.4 V,\\n*                                                system frequency up to 216 MHz.\\n*            @arg PWR_REGULATOR_VOLTAGE_SCALE2: Regulator voltage output range 2 mode,\\n*                                                typical output voltage at 1.2 V,\\n*                                                system frequency up to 180 MHz.\\n*            @arg PWR_REGULATOR_VOLTAGE_SCALE3: Regulator voltage output range 2 mode,\\n*                                                typical output voltage at 1.00 V,\\n*                                                system frequency up to 151 MHz.\\n* @note To update the system clock frequency(SYSCLK):\\n*        - Set the HSI or HSE as system clock frequency using the HAL_RCC_ClockConfig().\\n*        - Call the HAL_RCC_OscConfig() to configure the PLL.\\n*        - Call HAL_PWREx_ConfigVoltageScaling() API to adjust the voltage scale.\\n*        - Set the new system clock frequency using the HAL_RCC_ClockConfig().\\n* @note The scale can be modified only when the HSI or HSE clock source is selected\\n*        as system clock source, otherwise the API returns HAL_ERROR.\\n* @note When the PLL is OFF, the voltage scale 3 is automatically selected and the VOS bits\\n*       value in the PWR_CR1 register are not taken in account.\\n* @note This API forces the PLL state ON to allow the possibility to configure the voltage scale 1 or 2.\\n* @note The new voltage scale is active only when the PLL is ON.\\n* @retval HAL Status\\n*/\\nHAL_StatusTypeDef HAL_PWREx_ControlVoltageScaling(uint32_t VoltageScaling)\\n{\\n  uint32_t tickstart = 0;\\n\\n  assert_param(IS_PWR_REGULATOR_VOLTAGE(VoltageScaling));\\n\\n  /* Enable Power ctrl clock */\\n  __HAL_RCC_PWR_CLK_ENABLE();\\n\\n  /* Check if the PLL is used as system clock or not */\\n  if(__HAL_RCC_GET_SYSCLK_SOURCE() != RCC_CFGR_SWS_PLL)\\n  {\\n    /* Disable the main PLL */\\n    __HAL_RCC_PLL_DISABLE();\\n    \\n    /* Get Start Tick */\\n    tickstart = HAL_GetTick();    \\n    /* Wait till PLL is disabled */  \\n    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) != RESET)\\n    {\\n      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)\\n      {\\n        return HAL_TIMEOUT;\\n      }\\n    }\\n    \\n    /* Set Range */\\n    __HAL_PWR_VOLTAGESCALING_CONFIG(VoltageScaling);\\n    \\n    /* Enable the main PLL */\\n    __HAL_RCC_PLL_ENABLE();\\n    \\n    /* Get Start Tick */\\n    tickstart = HAL_GetTick();\\n    /* Wait till PLL is ready */  \\n    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET)\\n    {\\n      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)\\n      {\\n        return HAL_TIMEOUT;\\n      } \\n    }\\n    \\n    /* Get Start Tick */\\n    tickstart = HAL_GetTick();\\n    while((__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY) == RESET))\\n    {\\n      if((HAL_GetTick() - tickstart ) > PWR_VOSRDY_TIMEOUT_VALUE)\\n      {\\n        return HAL_TIMEOUT;\\n      } \\n    }\\n  }\\n  else\\n  {\\n    return HAL_ERROR;\\n  }\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'476': 'HAL_StatusTypeDef HAL_PWREx_ControlVoltageScaling(uint32_t VoltageScaling)', '477': '{', '478': '  uint32_t tickstart = 0;', '479': '', '480': '  assert_param(IS_PWR_REGULATOR_VOLTAGE(VoltageScaling));', '481': '', '482': '  /* Enable Power ctrl clock */', '483': '  __HAL_RCC_PWR_CLK_ENABLE();', '484': '', '485': '  /* Check if the PLL is used as system clock or not */', '486': '  if(__HAL_RCC_GET_SYSCLK_SOURCE() != RCC_CFGR_SWS_PLL)', '487': '  {', '488': '    /* Disable the main PLL */', '489': '    __HAL_RCC_PLL_DISABLE();', '490': '    ', '491': '    /* Get Start Tick */', '492': '    tickstart = HAL_GetTick();    ', '493': '    /* Wait till PLL is disabled */  ', '494': '    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) != RESET)', '495': '    {', '496': '      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)', '497': '      {', '498': '        return HAL_TIMEOUT;', '499': '      }', '500': '    }', '501': '    ', '502': '    /* Set Range */', '503': '    __HAL_PWR_VOLTAGESCALING_CONFIG(VoltageScaling);', '504': '    ', '505': '    /* Enable the main PLL */', '506': '    __HAL_RCC_PLL_ENABLE();', '507': '    ', '508': '    /* Get Start Tick */', '509': '    tickstart = HAL_GetTick();', '510': '    /* Wait till PLL is ready */  ', '511': '    while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLRDY) == RESET)', '512': '    {', '513': '      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)', '514': '      {', '515': '        return HAL_TIMEOUT;', '516': '      } ', '517': '    }', '518': '    ', '519': '    /* Get Start Tick */', '520': '    tickstart = HAL_GetTick();', '521': '    while((__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY) == RESET))', '522': '    {', '523': '      if((HAL_GetTick() - tickstart ) > PWR_VOSRDY_TIMEOUT_VALUE)', '524': '      {', '525': '        return HAL_TIMEOUT;', '526': '      } ', '527': '    }', '528': '  }', '529': '  else', '530': '  {', '531': '    return HAL_ERROR;', '532': '  }', '533': '  return HAL_OK;', '534': '}'})\nMMIO Exprs info: [MmioExprInfo(name='tmpreg', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=483, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='CR1', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='VoltageScaling', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='~ ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='unary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=483, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=486, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=494, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=511, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=521, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... | ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_PWREx_ControlVoltageScaling', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=503, expr_type='assign', enclosing_type='stmt')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "ef145898-8051-4336-b8fe-b935aa4f2967",
+      "tool_call_id": "call_00_IvztHuVfH8BCCJt2TP2XeBrr",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_c7AE4fxWcmzZAsWxjR3ixdPp",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_PWREx_ControlVoltageScaling\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 41,
+          "prompt_tokens": 6641,
+          "total_tokens": 6682,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3584
+          },
+          "prompt_cache_hit_tokens": 3584,
+          "prompt_cache_miss_tokens": 3057
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--e478fcc4-9332-4ead-97a9-7265f01ebb41-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_PWREx_ControlVoltageScaling"
+          },
+          "id": "call_00_c7AE4fxWcmzZAsWxjR3ixdPp",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 6641,
+        "output_tokens": 41,
+        "total_tokens": 6682,
+        "input_token_details": {
+          "cache_read": 3584
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=492, call_type='direct', ret_type='noReturnValue', start_line_content='    tickstart = HAL_GetTick();    '), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=492, call_type='direct', ret_type='hasReturnValue', start_line_content='    tickstart = HAL_GetTick();    '), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=496, call_type='direct', ret_type='noReturnValue', start_line_content='      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=509, call_type='direct', ret_type='noReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=509, call_type='direct', ret_type='hasReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=513, call_type='direct', ret_type='noReturnValue', start_line_content='      if((HAL_GetTick() - tickstart ) > PLL_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=520, call_type='direct', ret_type='noReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=520, call_type='direct', ret_type='hasReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_PWREx_ControlVoltageScaling', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', start_line=523, call_type='direct', ret_type='noReturnValue', start_line_content='      if((HAL_GetTick() - tickstart ) > PWR_VOSRDY_TIMEOUT_VALUE)')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "1e71b545-ee38-4977-b206-47c067afbda1",
+      "tool_call_id": "call_00_c7AE4fxWcmzZAsWxjR3ixdPp",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check if there are any structs or enums used in this function:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_HlgwWp3R3xchiecoM8z7U0db",
+            "function": {
+              "arguments": "{\"struct_name\": \"PWR_REGULATOR_VOLTAGE\"}",
+              "name": "collect_struct_or_enum_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 7804,
+          "total_tokens": 7848,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 6656
+          },
+          "prompt_cache_hit_tokens": 6656,
+          "prompt_cache_miss_tokens": 1148
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--d37c657a-4424-41d3-9b61-ac02baa0dd1c-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "PWR_REGULATOR_VOLTAGE"
+          },
+          "id": "call_00_HlgwWp3R3xchiecoM8z7U0db",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 7804,
+        "output_tokens": 44,
+        "total_tokens": 7848,
+        "input_token_details": {
+          "cache_read": 6656
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct or enum not found: PWR_REGULATOR_VOLTAGE",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "9c7e096f-d94d-446a-8388-a589e862329b",
+      "tool_call_id": "call_00_HlgwWp3R3xchiecoM8z7U0db",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `HAL_PWREx_ControlVoltageScaling`, I can now provide the classification:\n\n## Function Classification: **RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function configures the main internal regulator output voltage to achieve a tradeoff between performance and power consumption. It's a power management function that controls voltage scaling levels.\n\n2. **Analysis of Operations**:\n   - The function performs peripheral register operations (PWR and RCC peripheral control)\n   - It enables/disables PLL (Phase-Locked Loop) and waits for hardware flags\n   - It configures voltage scaling through `__HAL_PWR_VOLTAGESCALING_CONFIG`\n   - It uses timeout mechanisms with `HAL_GetTick()` for hardware status polling\n\n3. **Category Determination**:\n   - **NOT RECV**: No data transmission/reception operations\n   - **NOT IRQ**: No interrupt handling or interrupt enable operations\n   - **NOT INIT**: While it configures hardware, it's not an initialization function but rather a runtime configuration function\n   - **RETURNOK**: This function only performs driver/peripheral operations (power management and clock control) and does not affect upper-layer data structures. It returns status codes (`HAL_OK`, `HAL_ERROR`, `HAL_TIMEOUT`) based on hardware operations.\n\n4. **Replacement Strategy**: \n   - Since this is purely a hardware control function for power management, it can be replaced with a function that returns success status (`HAL_OK`) by default\n   - The voltage scaling configuration is hardware-specific and doesn't affect the application's data structures or program logic\n   - Timeout logic and hardware polling can be removed as they are peripheral-dependent operations\n\nThe function fits the **RETURNOK** category because it exclusively handles peripheral hardware operations (power management and clock control) without affecting application-level data structures or program state.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 397,
+          "prompt_tokens": 7866,
+          "total_tokens": 8263,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 7808
+          },
+          "prompt_cache_hit_tokens": 7808,
+          "prompt_cache_miss_tokens": 58
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--9c831761-7f90-4de9-b69f-8136ced63274-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 7866,
+        "output_tokens": 397,
+        "total_tokens": 8263,
+        "input_token_details": {
+          "cache_read": 7808
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_PWREx_ControlVoltageScaling",
+    "function_type": "RETURNOK",
+    "functionality": "Configures the main internal regulator output voltage to achieve a tradeoff between performance and power consumption by controlling PLL and voltage scaling settings",
+    "classification_reason": "This function performs peripheral hardware operations for power management and clock control (PWR and RCC peripheral operations) but does not affect upper-layer data structures or application logic. It only returns status codes based on hardware operations, making it suitable for RETURNOK classification where success status can be returned by default.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

@@ -1,0 +1,348 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "76c7834b-2794-42a4-af50-cce6c832f7e8"
+    },
+    {
+      "content": "Classify the function : HAL_DMA2D_PollForTransfer",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "a0ac052e-5107-4c53-93b9-e292762e2919",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `HAL_DMA2D_PollForTransfer` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_llYCTtP6MaWUUya9SZRVWCZp",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_DMA2D_PollForTransfer\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 60,
+          "prompt_tokens": 1674,
+          "total_tokens": 1734,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 10
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--81510e12-495a-4c75-a04e-f80a66c57160-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_DMA2D_PollForTransfer"
+          },
+          "id": "call_00_llYCTtP6MaWUUya9SZRVWCZp",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1674,
+        "output_tokens": 60,
+        "total_tokens": 1734,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', location_line=1382, function_content='/**\\n\\n* @brief  Polling for transfer complete or CLUT loading.\\n* @param  hdma2d Pointer to a DMA2D_HandleTypeDef structure that contains\\n*                 the configuration information for the DMA2D.\\n* @param  Timeout Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_DMA2D_PollForTransfer(DMA2D_HandleTypeDef *hdma2d, uint32_t Timeout)\\n{\\n  uint32_t tickstart;\\n  uint32_t layer_start;\\n  __IO uint32_t isrflags = 0x0U;\\n\\n  /* Polling for DMA2D transfer */\\n  if ((hdma2d->Instance->CR & DMA2D_CR_START) != 0U)\\n  {\\n    /* Get tick */\\n    tickstart = HAL_GetTick();\\n\\n    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_TC) == 0U)\\n    {\\n      isrflags = READ_REG(hdma2d->Instance->ISR);\\n      if ((isrflags & (DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)\\n      {\\n        if ((isrflags & DMA2D_FLAG_CE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;\\n        }\\n        if ((isrflags & DMA2D_FLAG_TE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;\\n        }\\n        /* Clear the transfer and configuration error flags */\\n        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CE | DMA2D_FLAG_TE);\\n\\n        /* Change DMA2D state */\\n        hdma2d->State = HAL_DMA2D_STATE_ERROR;\\n\\n        /* Process unlocked */\\n        __HAL_UNLOCK(hdma2d);\\n\\n        return HAL_ERROR;\\n      }\\n      /* Check for the Timeout */\\n      if (Timeout != HAL_MAX_DELAY)\\n      {\\n        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))\\n        {\\n          /* Update error code */\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;\\n\\n          /* Change the DMA2D state */\\n          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;\\n\\n          /* Process unlocked */\\n          __HAL_UNLOCK(hdma2d);\\n\\n          return HAL_TIMEOUT;\\n        }\\n      }\\n    }\\n  }\\n  /* Polling for CLUT loading (foreground or background) */\\n  layer_start = hdma2d->Instance->FGPFCCR & DMA2D_FGPFCCR_START;\\n  layer_start |= hdma2d->Instance->BGPFCCR & DMA2D_BGPFCCR_START;\\n  if (layer_start != 0U)\\n  {\\n    /* Get tick */\\n    tickstart = HAL_GetTick();\\n\\n    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_CTC) == 0U)\\n    {\\n      isrflags = READ_REG(hdma2d->Instance->ISR);\\n      if ((isrflags & (DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)\\n      {\\n        if ((isrflags & DMA2D_FLAG_CAE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CAE;\\n        }\\n        if ((isrflags & DMA2D_FLAG_CE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;\\n        }\\n        if ((isrflags & DMA2D_FLAG_TE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;\\n        }\\n        /* Clear the CLUT Access Error, Configuration Error and Transfer Error flags */\\n        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE);\\n\\n        /* Change DMA2D state */\\n        hdma2d->State = HAL_DMA2D_STATE_ERROR;\\n\\n        /* Process unlocked */\\n        __HAL_UNLOCK(hdma2d);\\n\\n        return HAL_ERROR;\\n      }\\n      /* Check for the Timeout */\\n      if (Timeout != HAL_MAX_DELAY)\\n      {\\n        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))\\n        {\\n          /* Update error code */\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;\\n\\n          /* Change the DMA2D state */\\n          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;\\n\\n          /* Process unlocked */\\n          __HAL_UNLOCK(hdma2d);\\n\\n          return HAL_TIMEOUT;\\n        }\\n      }\\n    }\\n  }\\n\\n  /* Clear the transfer complete and CLUT loading flags */\\n  __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_TC | DMA2D_FLAG_CTC);\\n\\n  /* Change DMA2D state */\\n  hdma2d->State = HAL_DMA2D_STATE_READY;\\n\\n  /* Process unlocked */\\n  __HAL_UNLOCK(hdma2d);\\n\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'1382': 'HAL_StatusTypeDef HAL_DMA2D_PollForTransfer(DMA2D_HandleTypeDef *hdma2d, uint32_t Timeout)', '1383': '{', '1384': '  uint32_t tickstart;', '1385': '  uint32_t layer_start;', '1386': '  __IO uint32_t isrflags = 0x0U;', '1387': '', '1388': '  /* Polling for DMA2D transfer */', '1389': '  if ((hdma2d->Instance->CR & DMA2D_CR_START) != 0U)', '1390': '  {', '1391': '    /* Get tick */', '1392': '    tickstart = HAL_GetTick();', '1393': '', '1394': '    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_TC) == 0U)', '1395': '    {', '1396': '      isrflags = READ_REG(hdma2d->Instance->ISR);', '1397': '      if ((isrflags & (DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)', '1398': '      {', '1399': '        if ((isrflags & DMA2D_FLAG_CE) != 0U)', '1400': '        {', '1401': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;', '1402': '        }', '1403': '        if ((isrflags & DMA2D_FLAG_TE) != 0U)', '1404': '        {', '1405': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;', '1406': '        }', '1407': '        /* Clear the transfer and configuration error flags */', '1408': '        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CE | DMA2D_FLAG_TE);', '1409': '', '1410': '        /* Change DMA2D state */', '1411': '        hdma2d->State = HAL_DMA2D_STATE_ERROR;', '1412': '', '1413': '        /* Process unlocked */', '1414': '        __HAL_UNLOCK(hdma2d);', '1415': '', '1416': '        return HAL_ERROR;', '1417': '      }', '1418': '      /* Check for the Timeout */', '1419': '      if (Timeout != HAL_MAX_DELAY)', '1420': '      {', '1421': '        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))', '1422': '        {', '1423': '          /* Update error code */', '1424': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;', '1425': '', '1426': '          /* Change the DMA2D state */', '1427': '          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;', '1428': '', '1429': '          /* Process unlocked */', '1430': '          __HAL_UNLOCK(hdma2d);', '1431': '', '1432': '          return HAL_TIMEOUT;', '1433': '        }', '1434': '      }', '1435': '    }', '1436': '  }', '1437': '  /* Polling for CLUT loading (foreground or background) */', '1438': '  layer_start = hdma2d->Instance->FGPFCCR & DMA2D_FGPFCCR_START;', '1439': '  layer_start |= hdma2d->Instance->BGPFCCR & DMA2D_BGPFCCR_START;', '1440': '  if (layer_start != 0U)', '1441': '  {', '1442': '    /* Get tick */', '1443': '    tickstart = HAL_GetTick();', '1444': '', '1445': '    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_CTC) == 0U)', '1446': '    {', '1447': '      isrflags = READ_REG(hdma2d->Instance->ISR);', '1448': '      if ((isrflags & (DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)', '1449': '      {', '1450': '        if ((isrflags & DMA2D_FLAG_CAE) != 0U)', '1451': '        {', '1452': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CAE;', '1453': '        }', '1454': '        if ((isrflags & DMA2D_FLAG_CE) != 0U)', '1455': '        {', '1456': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;', '1457': '        }', '1458': '        if ((isrflags & DMA2D_FLAG_TE) != 0U)', '1459': '        {', '1460': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;', '1461': '        }', '1462': '        /* Clear the CLUT Access Error, Configuration Error and Transfer Error flags */', '1463': '        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE);', '1464': '', '1465': '        /* Change DMA2D state */', '1466': '        hdma2d->State = HAL_DMA2D_STATE_ERROR;', '1467': '', '1468': '        /* Process unlocked */', '1469': '        __HAL_UNLOCK(hdma2d);', '1470': '', '1471': '        return HAL_ERROR;', '1472': '      }', '1473': '      /* Check for the Timeout */', '1474': '      if (Timeout != HAL_MAX_DELAY)', '1475': '      {', '1476': '        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))', '1477': '        {', '1478': '          /* Update error code */', '1479': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;', '1480': '', '1481': '          /* Change the DMA2D state */', '1482': '          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;', '1483': '', '1484': '          /* Process unlocked */', '1485': '          __HAL_UNLOCK(hdma2d);', '1486': '', '1487': '          return HAL_TIMEOUT;', '1488': '        }', '1489': '      }', '1490': '    }', '1491': '  }', '1492': '', '1493': '  /* Clear the transfer complete and CLUT loading flags */', '1494': '  __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_TC | DMA2D_FLAG_CTC);', '1495': '', '1496': '  /* Change DMA2D state */', '1497': '  hdma2d->State = HAL_DMA2D_STATE_READY;', '1498': '', '1499': '  /* Process unlocked */', '1500': '  __HAL_UNLOCK(hdma2d);', '1501': '', '1502': '  return HAL_OK;', '1503': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "16aeece1-86a3-43d5-8554-48ddb2aae94f",
+      "tool_call_id": "call_00_llYCTtP6MaWUUya9SZRVWCZp",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO function information to understand the peripheral operations:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_vyQ22pRYaDOJF6IZfo6tib3A",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_DMA2D_PollForTransfer\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 42,
+          "prompt_tokens": 5115,
+          "total_tokens": 5157,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 3387
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--26c9d465-7fa5-4b10-83cd-b28983ac8abc-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_DMA2D_PollForTransfer"
+          },
+          "id": "call_00_vyQ22pRYaDOJF6IZfo6tib3A",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5115,
+        "output_tokens": 42,
+        "total_tokens": 5157,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', location_line=1382, function_content='/**\\n\\n* @brief  Polling for transfer complete or CLUT loading.\\n* @param  hdma2d Pointer to a DMA2D_HandleTypeDef structure that contains\\n*                 the configuration information for the DMA2D.\\n* @param  Timeout Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_DMA2D_PollForTransfer(DMA2D_HandleTypeDef *hdma2d, uint32_t Timeout)\\n{\\n  uint32_t tickstart;\\n  uint32_t layer_start;\\n  __IO uint32_t isrflags = 0x0U;\\n\\n  /* Polling for DMA2D transfer */\\n  if ((hdma2d->Instance->CR & DMA2D_CR_START) != 0U)\\n  {\\n    /* Get tick */\\n    tickstart = HAL_GetTick();\\n\\n    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_TC) == 0U)\\n    {\\n      isrflags = READ_REG(hdma2d->Instance->ISR);\\n      if ((isrflags & (DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)\\n      {\\n        if ((isrflags & DMA2D_FLAG_CE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;\\n        }\\n        if ((isrflags & DMA2D_FLAG_TE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;\\n        }\\n        /* Clear the transfer and configuration error flags */\\n        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CE | DMA2D_FLAG_TE);\\n\\n        /* Change DMA2D state */\\n        hdma2d->State = HAL_DMA2D_STATE_ERROR;\\n\\n        /* Process unlocked */\\n        __HAL_UNLOCK(hdma2d);\\n\\n        return HAL_ERROR;\\n      }\\n      /* Check for the Timeout */\\n      if (Timeout != HAL_MAX_DELAY)\\n      {\\n        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))\\n        {\\n          /* Update error code */\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;\\n\\n          /* Change the DMA2D state */\\n          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;\\n\\n          /* Process unlocked */\\n          __HAL_UNLOCK(hdma2d);\\n\\n          return HAL_TIMEOUT;\\n        }\\n      }\\n    }\\n  }\\n  /* Polling for CLUT loading (foreground or background) */\\n  layer_start = hdma2d->Instance->FGPFCCR & DMA2D_FGPFCCR_START;\\n  layer_start |= hdma2d->Instance->BGPFCCR & DMA2D_BGPFCCR_START;\\n  if (layer_start != 0U)\\n  {\\n    /* Get tick */\\n    tickstart = HAL_GetTick();\\n\\n    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_CTC) == 0U)\\n    {\\n      isrflags = READ_REG(hdma2d->Instance->ISR);\\n      if ((isrflags & (DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)\\n      {\\n        if ((isrflags & DMA2D_FLAG_CAE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CAE;\\n        }\\n        if ((isrflags & DMA2D_FLAG_CE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;\\n        }\\n        if ((isrflags & DMA2D_FLAG_TE) != 0U)\\n        {\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;\\n        }\\n        /* Clear the CLUT Access Error, Configuration Error and Transfer Error flags */\\n        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE);\\n\\n        /* Change DMA2D state */\\n        hdma2d->State = HAL_DMA2D_STATE_ERROR;\\n\\n        /* Process unlocked */\\n        __HAL_UNLOCK(hdma2d);\\n\\n        return HAL_ERROR;\\n      }\\n      /* Check for the Timeout */\\n      if (Timeout != HAL_MAX_DELAY)\\n      {\\n        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))\\n        {\\n          /* Update error code */\\n          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;\\n\\n          /* Change the DMA2D state */\\n          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;\\n\\n          /* Process unlocked */\\n          __HAL_UNLOCK(hdma2d);\\n\\n          return HAL_TIMEOUT;\\n        }\\n      }\\n    }\\n  }\\n\\n  /* Clear the transfer complete and CLUT loading flags */\\n  __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_TC | DMA2D_FLAG_CTC);\\n\\n  /* Change DMA2D state */\\n  hdma2d->State = HAL_DMA2D_STATE_READY;\\n\\n  /* Process unlocked */\\n  __HAL_UNLOCK(hdma2d);\\n\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'1382': 'HAL_StatusTypeDef HAL_DMA2D_PollForTransfer(DMA2D_HandleTypeDef *hdma2d, uint32_t Timeout)', '1383': '{', '1384': '  uint32_t tickstart;', '1385': '  uint32_t layer_start;', '1386': '  __IO uint32_t isrflags = 0x0U;', '1387': '', '1388': '  /* Polling for DMA2D transfer */', '1389': '  if ((hdma2d->Instance->CR & DMA2D_CR_START) != 0U)', '1390': '  {', '1391': '    /* Get tick */', '1392': '    tickstart = HAL_GetTick();', '1393': '', '1394': '    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_TC) == 0U)', '1395': '    {', '1396': '      isrflags = READ_REG(hdma2d->Instance->ISR);', '1397': '      if ((isrflags & (DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)', '1398': '      {', '1399': '        if ((isrflags & DMA2D_FLAG_CE) != 0U)', '1400': '        {', '1401': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;', '1402': '        }', '1403': '        if ((isrflags & DMA2D_FLAG_TE) != 0U)', '1404': '        {', '1405': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;', '1406': '        }', '1407': '        /* Clear the transfer and configuration error flags */', '1408': '        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CE | DMA2D_FLAG_TE);', '1409': '', '1410': '        /* Change DMA2D state */', '1411': '        hdma2d->State = HAL_DMA2D_STATE_ERROR;', '1412': '', '1413': '        /* Process unlocked */', '1414': '        __HAL_UNLOCK(hdma2d);', '1415': '', '1416': '        return HAL_ERROR;', '1417': '      }', '1418': '      /* Check for the Timeout */', '1419': '      if (Timeout != HAL_MAX_DELAY)', '1420': '      {', '1421': '        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))', '1422': '        {', '1423': '          /* Update error code */', '1424': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;', '1425': '', '1426': '          /* Change the DMA2D state */', '1427': '          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;', '1428': '', '1429': '          /* Process unlocked */', '1430': '          __HAL_UNLOCK(hdma2d);', '1431': '', '1432': '          return HAL_TIMEOUT;', '1433': '        }', '1434': '      }', '1435': '    }', '1436': '  }', '1437': '  /* Polling for CLUT loading (foreground or background) */', '1438': '  layer_start = hdma2d->Instance->FGPFCCR & DMA2D_FGPFCCR_START;', '1439': '  layer_start |= hdma2d->Instance->BGPFCCR & DMA2D_BGPFCCR_START;', '1440': '  if (layer_start != 0U)', '1441': '  {', '1442': '    /* Get tick */', '1443': '    tickstart = HAL_GetTick();', '1444': '', '1445': '    while (__HAL_DMA2D_GET_FLAG(hdma2d, DMA2D_FLAG_CTC) == 0U)', '1446': '    {', '1447': '      isrflags = READ_REG(hdma2d->Instance->ISR);', '1448': '      if ((isrflags & (DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE)) != 0U)', '1449': '      {', '1450': '        if ((isrflags & DMA2D_FLAG_CAE) != 0U)', '1451': '        {', '1452': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CAE;', '1453': '        }', '1454': '        if ((isrflags & DMA2D_FLAG_CE) != 0U)', '1455': '        {', '1456': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_CE;', '1457': '        }', '1458': '        if ((isrflags & DMA2D_FLAG_TE) != 0U)', '1459': '        {', '1460': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TE;', '1461': '        }', '1462': '        /* Clear the CLUT Access Error, Configuration Error and Transfer Error flags */', '1463': '        __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_CAE | DMA2D_FLAG_CE | DMA2D_FLAG_TE);', '1464': '', '1465': '        /* Change DMA2D state */', '1466': '        hdma2d->State = HAL_DMA2D_STATE_ERROR;', '1467': '', '1468': '        /* Process unlocked */', '1469': '        __HAL_UNLOCK(hdma2d);', '1470': '', '1471': '        return HAL_ERROR;', '1472': '      }', '1473': '      /* Check for the Timeout */', '1474': '      if (Timeout != HAL_MAX_DELAY)', '1475': '      {', '1476': '        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))', '1477': '        {', '1478': '          /* Update error code */', '1479': '          hdma2d->ErrorCode |= HAL_DMA2D_ERROR_TIMEOUT;', '1480': '', '1481': '          /* Change the DMA2D state */', '1482': '          hdma2d->State = HAL_DMA2D_STATE_TIMEOUT;', '1483': '', '1484': '          /* Process unlocked */', '1485': '          __HAL_UNLOCK(hdma2d);', '1486': '', '1487': '          return HAL_TIMEOUT;', '1488': '        }', '1489': '      }', '1490': '    }', '1491': '  }', '1492': '', '1493': '  /* Clear the transfer complete and CLUT loading flags */', '1494': '  __HAL_DMA2D_CLEAR_FLAG(hdma2d, DMA2D_FLAG_TC | DMA2D_FLAG_CTC);', '1495': '', '1496': '  /* Change DMA2D state */', '1497': '  hdma2d->State = HAL_DMA2D_STATE_READY;', '1498': '', '1499': '  /* Process unlocked */', '1500': '  __HAL_UNLOCK(hdma2d);', '1501': '', '1502': '  return HAL_OK;', '1503': '}'})\nMMIO Exprs info: [MmioExprInfo(name='CR', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1389, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1396, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1397, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1399, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1403, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1447, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1448, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1450, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1454, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='isrflags', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1458, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='layer_start', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1438, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='layer_start', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1439, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='layer_start', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1440, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='... |= ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1439, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1389, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1394, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1397, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1399, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1403, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1438, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1439, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1445, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1448, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1450, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1454, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1458, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1389, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1397, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1399, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1403, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1440, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1448, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1450, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1454, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1458, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... = ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1408, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1463, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1494, expr_type='assign', enclosing_type='stmt')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "7a084384-8af2-40b3-b581-81ef96223ec6",
+      "tool_call_id": "call_00_vyQ22pRYaDOJF6IZfo6tib3A",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_WpGH0jVKsniNFfayCKFFzcc5",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_DMA2D_PollForTransfer\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 40,
+          "prompt_tokens": 11921,
+          "total_tokens": 11961,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 5120
+          },
+          "prompt_cache_hit_tokens": 5120,
+          "prompt_cache_miss_tokens": 6801
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--d7f84657-3c14-4b14-a70c-516b1e83ba46-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_DMA2D_PollForTransfer"
+          },
+          "id": "call_00_WpGH0jVKsniNFfayCKFFzcc5",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 11921,
+        "output_tokens": 40,
+        "total_tokens": 11961,
+        "input_token_details": {
+          "cache_read": 5120
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_DMA2D_PollForTransfer', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1392, call_type='direct', ret_type='noReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DMA2D_PollForTransfer', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1392, call_type='direct', ret_type='hasReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DMA2D_PollForTransfer', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1421, call_type='direct', ret_type='noReturnValue', start_line_content='        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))'), FunctionCallInfo(caller_name='HAL_DMA2D_PollForTransfer', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1443, call_type='direct', ret_type='noReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DMA2D_PollForTransfer', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1443, call_type='direct', ret_type='hasReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DMA2D_PollForTransfer', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', start_line=1476, call_type='direct', ret_type='noReturnValue', start_line_content='        if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))')]\nFunction call from info: [FunctionCallInfo(caller_name='LL_ConvertLineToARGB8888', callee_name='HAL_DMA2D_PollForTransfer', call_tag='call to HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_lcd.c', start_line=1921, call_type='direct', ret_type='noReturnValue', start_line_content='        HAL_DMA2D_PollForTransfer(&hdma2d_eval, 10);'), FunctionCallInfo(caller_name='LL_FillBuffer', callee_name='HAL_DMA2D_PollForTransfer', call_tag='call to HAL_DMA2D_PollForTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_lcd.c', start_line=1885, call_type='direct', ret_type='noReturnValue', start_line_content='        HAL_DMA2D_PollForTransfer(&hdma2d_eval, 10);')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "3b5cf787-e00b-417f-9102-c330321cdb8f",
+      "tool_call_id": "call_00_WpGH0jVKsniNFfayCKFFzcc5",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the DMA2D_HandleTypeDef structure to understand the data structure being used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_KxrBFEwFwpCuAMBEatG9V816",
+            "function": {
+              "arguments": "{\"struct_name\": \"DMA2D_HandleTypeDef\"}",
+              "name": "collect_struct_or_enum_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 46,
+          "prompt_tokens": 12991,
+          "total_tokens": 13037,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11904
+          },
+          "prompt_cache_hit_tokens": 11904,
+          "prompt_cache_miss_tokens": 1087
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--ddf03178-362f-49ab-afd1-44143bb3a8e7-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "DMA2D_HandleTypeDef"
+          },
+          "id": "call_00_KxrBFEwFwpCuAMBEatG9V816",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12991,
+        "output_tokens": 46,
+        "total_tokens": 13037,
+        "input_token_details": {
+          "cache_read": 11904
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='DMA2D_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma2d.h', location_line=145, struct_content='/**\\n* @brief  DMA2D handle Structure definition\\n*/\\ntypedef struct __DMA2D_HandleTypeDef\\n{\\n  DMA2D_TypeDef               *Instance;                                  /*!< DMA2D register base address.           */\\n\\n  DMA2D_InitTypeDef           Init;                                       /*!< DMA2D communication parameters.        */\\n\\n  void (* XferCpltCallback)(struct __DMA2D_HandleTypeDef *hdma2d);        /*!< DMA2D transfer complete callback.      */\\n\\n  void (* XferErrorCallback)(struct __DMA2D_HandleTypeDef *hdma2d);       /*!< DMA2D transfer error callback.         */\\n\\n#if (USE_HAL_DMA2D_REGISTER_CALLBACKS == 1)\\n  void (* LineEventCallback)(struct __DMA2D_HandleTypeDef *hdma2d);       /*!< DMA2D line event callback.             */\\n\\n  void (* CLUTLoadingCpltCallback)(struct __DMA2D_HandleTypeDef *hdma2d); /*!< DMA2D CLUT loading completion callback */\\n\\n  void (* MspInitCallback)(struct __DMA2D_HandleTypeDef *hdma2d);         /*!< DMA2D Msp Init callback.               */\\n\\n  void (* MspDeInitCallback)(struct __DMA2D_HandleTypeDef *hdma2d);       /*!< DMA2D Msp DeInit callback.             */\\n\\n#endif /* (USE_HAL_DMA2D_REGISTER_CALLBACKS) */\\n\\n  DMA2D_LayerCfgTypeDef       LayerCfg[MAX_DMA2D_LAYER];                  /*!< DMA2D Layers parameters                */\\n\\n  HAL_LockTypeDef             Lock;                                       /*!< DMA2D lock.                            */\\n\\n  __IO HAL_DMA2D_StateTypeDef State;                                      /*!< DMA2D transfer state.                  */\\n\\n  __IO uint32_t               ErrorCode;                                  /*!< DMA2D error code.                      */\\n} DMA2D_HandleTypeDef;\\n', struct_content_in_lines={'145': 'typedef struct __DMA2D_HandleTypeDef', '146': '{', '147': '  DMA2D_TypeDef               *Instance;                                  /*!< DMA2D register base address.           */', '148': '', '149': '  DMA2D_InitTypeDef           Init;                                       /*!< DMA2D communication parameters.        */', '150': '', '151': '  void (* XferCpltCallback)(struct __DMA2D_HandleTypeDef *hdma2d);        /*!< DMA2D transfer complete callback.      */', '152': '', '153': '  void (* XferErrorCallback)(struct __DMA2D_HandleTypeDef *hdma2d);       /*!< DMA2D transfer error callback.         */', '154': '', '155': '#if (USE_HAL_DMA2D_REGISTER_CALLBACKS == 1)', '156': '  void (* LineEventCallback)(struct __DMA2D_HandleTypeDef *hdma2d);       /*!< DMA2D line event callback.             */', '157': '', '158': '  void (* CLUTLoadingCpltCallback)(struct __DMA2D_HandleTypeDef *hdma2d); /*!< DMA2D CLUT loading completion callback */', '159': '', '160': '  void (* MspInitCallback)(struct __DMA2D_HandleTypeDef *hdma2d);         /*!< DMA2D Msp Init callback.               */', '161': '', '162': '  void (* MspDeInitCallback)(struct __DMA2D_HandleTypeDef *hdma2d);       /*!< DMA2D Msp DeInit callback.             */', '163': '', '164': '#endif /* (USE_HAL_DMA2D_REGISTER_CALLBACKS) */', '165': '', '166': '  DMA2D_LayerCfgTypeDef       LayerCfg[MAX_DMA2D_LAYER];                  /*!< DMA2D Layers parameters                */', '167': '', '168': '  HAL_LockTypeDef             Lock;                                       /*!< DMA2D lock.                            */', '169': '', '170': '  __IO HAL_DMA2D_StateTypeDef State;                                      /*!< DMA2D transfer state.                  */', '171': '', '172': '  __IO uint32_t               ErrorCode;                                  /*!< DMA2D error code.                      */', '173': '} DMA2D_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'DMA2D_InitTypeDef', 'XferCpltCallback': '..(*)(..)', 'XferErrorCallback': '..(*)(..)', 'LayerCfg': 'struct <unnamed>[2]', 'Lock': '(unnamed enum)', 'State': 'HAL_DMA2D_StateTypeDef', 'ErrorCode': '__fd_mask'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "16490793-0fdf-4c4e-b7cd-8f5852bc73a0",
+      "tool_call_id": "call_00_KxrBFEwFwpCuAMBEatG9V816",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `HAL_DMA2D_PollForTransfer`, I can now provide the classification:\n\n## Function Classification: **RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function performs polling for DMA2D (Direct Memory Access 2D) transfer completion or CLUT (Color Look-Up Table) loading. It waits for hardware operations to complete by checking status flags.\n\n2. **Analysis of Function Behavior**:\n   - The function polls hardware registers (`hdma2d->Instance->CR`, `hdma2d->Instance->ISR`, etc.) to check for transfer completion flags\n   - It handles timeout scenarios using `HAL_GetTick()`\n   - It updates the DMA2D state machine (`hdma2d->State`) and error codes (`hdma2d->ErrorCode`)\n   - It clears hardware flags after completion\n\n3. **Key Observations**:\n   - **No data transmission/reception**: This function doesn't perform actual data I/O operations - it only monitors the status of hardware transfers\n   - **No interrupt operations**: While it deals with hardware flags, it doesn't enable/disable interrupts or handle interrupt service routines\n   - **Pure status monitoring**: The function's main purpose is to wait for hardware operations to complete and report status\n   - **State machine management**: It updates the DMA2D state (`HAL_DMA2D_STATE_READY`, `HAL_DMA2D_STATE_ERROR`, etc.)\n\n4. **Classification Rationale**:\n   - This is a **driver-only functionality function** that performs peripheral status monitoring\n   - It doesn't affect upper-layer data structures beyond updating the DMA2D handle's state and error codes\n   - The function can be safely replaced by returning success status since in a POSIX environment, we can assume hardware operations complete immediately\n   - According to the classification rules, this fits the **RETURNOK** category as it \"only performs driver/peripheral operations and does not affect upper-layer data structures\"\n\n5. **Replacement Strategy**: \n   - Return `HAL_OK` (success status) since the function's main purpose is to wait for hardware completion\n   - In a POSIX environment, we can assume hardware operations complete immediately without needing actual polling\n   - The state machine updates can be preserved to maintain program logic consistency\n\nThe function is not classified as RECV (no data I/O), IRQ (no interrupt handling), INIT (not initialization), SKIP (has important state management), or NEEDCHECK (relatively straightforward peripheral monitoring).",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 534,
+          "prompt_tokens": 14275,
+          "total_tokens": 14809,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 12992
+          },
+          "prompt_cache_hit_tokens": 12992,
+          "prompt_cache_miss_tokens": 1283
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--843b307b-f318-48c1-9f28-1cc24409567b-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 14275,
+        "output_tokens": 534,
+        "total_tokens": 14809,
+        "input_token_details": {
+          "cache_read": 12992
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_DMA2D_PollForTransfer",
+    "function_type": "RETURNOK",
+    "functionality": "Polling for DMA2D transfer completion or CLUT loading by monitoring hardware status flags and handling timeouts",
+    "classification_reason": "This function performs driver-only peripheral status monitoring without data transmission/reception or interrupt operations. It polls hardware registers to check for transfer completion and updates the DMA2D state machine, but doesn't affect upper-layer data structures. Can be safely replaced by returning success status in POSIX environment.",
+    "has_replacement": true,
+    "function_replacement": "HAL_StatusTypeDef HAL_DMA2D_PollForTransfer(DMA2D_HandleTypeDef *hdma2d, uint32_t Timeout)\n{\n  /* In POSIX environment, assume DMA2D transfer completes immediately */\n  /* Clear the transfer complete and CLUT loading flags */\n  /* Change DMA2D state */\n  hdma2d->State = HAL_DMA2D_STATE_READY;\n\n  /* Process unlocked */\n  __HAL_UNLOCK(hdma2d);\n\n  return HAL_OK;\n}"
+  }
+}

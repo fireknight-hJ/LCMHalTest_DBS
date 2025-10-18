@@ -1,0 +1,278 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "ae9f65c4-31df-40a7-9a79-18c00ee973ac"
+    },
+    {
+      "content": "Classify the function : BSP_SRAM_MspInit",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "4a6ae7d3-b762-4fd5-8084-88703ccf56c0",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `BSP_SRAM_MspInit` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_weRWCU64JjmrUsoteymMEXfH",
+            "function": {
+              "arguments": "{\"func_name\": \"BSP_SRAM_MspInit\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 54,
+          "prompt_tokens": 1672,
+          "total_tokens": 1726,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 8
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--819c38f3-2706-4d90-b1e0-c64d71d1d43d-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "BSP_SRAM_MspInit"
+          },
+          "id": "call_00_weRWCU64JjmrUsoteymMEXfH",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1672,
+        "output_tokens": 54,
+        "total_tokens": 1726,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', location_line=274, function_content='/**\\n* @brief  Initializes SRAM MSP.\\n* @param  hsram: SRAM handle\\n* @param  Params\\n* @retval None\\n*/\\n__weak void BSP_SRAM_MspInit(SRAM_HandleTypeDef  *hsram, void *Params)\\n{  \\n  static DMA_HandleTypeDef dma_handle;\\n  GPIO_InitTypeDef gpio_init_structure;\\n  \\n  /* Enable FMC clock */\\n  __HAL_RCC_FMC_CLK_ENABLE();\\n  \\n  /* Enable chosen DMAx clock */\\n  __SRAM_DMAx_CLK_ENABLE();\\n\\n  /* Enable GPIOs clock */\\n  __HAL_RCC_GPIOD_CLK_ENABLE();\\n  __HAL_RCC_GPIOE_CLK_ENABLE();\\n  __HAL_RCC_GPIOF_CLK_ENABLE();\\n  __HAL_RCC_GPIOG_CLK_ENABLE();\\n  \\n  /* Common GPIO configuration */\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF12_FMC;\\n  \\n  /* GPIOD configuration */\\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8     |\\\\\\n                              GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |\\\\\\n                              GPIO_PIN_14 | GPIO_PIN_15;\\n  HAL_GPIO_Init(GPIOD, &gpio_init_structure);\\n\\n  /* GPIOE configuration */  \\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3| GPIO_PIN_4 | GPIO_PIN_7     |\\\\\\n                              GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 |\\\\\\n                              GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;\\n  HAL_GPIO_Init(GPIOE, &gpio_init_structure);\\n  \\n  /* GPIOF configuration */  \\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\\\n                              GPIO_PIN_5 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;\\n  HAL_GPIO_Init(GPIOF, &gpio_init_structure);\\n  \\n  /* GPIOG configuration */  \\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\\\n                              GPIO_PIN_5 | GPIO_PIN_6;\\n  HAL_GPIO_Init(GPIOG, &gpio_init_structure);  \\n  \\n  /* Configure common DMA parameters */\\n  dma_handle.Init.Channel             = SRAM_DMAx_CHANNEL;\\n  dma_handle.Init.Direction           = DMA_MEMORY_TO_MEMORY;\\n  dma_handle.Init.PeriphInc           = DMA_PINC_ENABLE;\\n  dma_handle.Init.MemInc              = DMA_MINC_ENABLE;\\n  dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;\\n  dma_handle.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;\\n  dma_handle.Init.Mode                = DMA_NORMAL;\\n  dma_handle.Init.Priority            = DMA_PRIORITY_HIGH;\\n  dma_handle.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;\\n  dma_handle.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;\\n  dma_handle.Init.MemBurst            = DMA_MBURST_SINGLE;\\n  dma_handle.Init.PeriphBurst         = DMA_PBURST_SINGLE;\\n  \\n  dma_handle.Instance = SRAM_DMAx_STREAM;\\n  \\n   /* Associate the DMA handle */\\n  __HAL_LINKDMA(hsram, hdma, dma_handle);\\n  \\n  /* Deinitialize the Stream for new transfer */\\n  HAL_DMA_DeInit(&dma_handle);\\n  \\n  /* Configure the DMA Stream */\\n  HAL_DMA_Init(&dma_handle);\\n  \\n  /* NVIC configuration for DMA transfer complete interrupt */\\n  HAL_NVIC_SetPriority(SRAM_DMAx_IRQn, 0x0F, 0);\\n  HAL_NVIC_EnableIRQ(SRAM_DMAx_IRQn);   \\n}\\n', function_content_in_lines={'274': '__weak void BSP_SRAM_MspInit(SRAM_HandleTypeDef  *hsram, void *Params)', '275': '{  ', '276': '  static DMA_HandleTypeDef dma_handle;', '277': '  GPIO_InitTypeDef gpio_init_structure;', '278': '  ', '279': '  /* Enable FMC clock */', '280': '  __HAL_RCC_FMC_CLK_ENABLE();', '281': '  ', '282': '  /* Enable chosen DMAx clock */', '283': '  __SRAM_DMAx_CLK_ENABLE();', '284': '', '285': '  /* Enable GPIOs clock */', '286': '  __HAL_RCC_GPIOD_CLK_ENABLE();', '287': '  __HAL_RCC_GPIOE_CLK_ENABLE();', '288': '  __HAL_RCC_GPIOF_CLK_ENABLE();', '289': '  __HAL_RCC_GPIOG_CLK_ENABLE();', '290': '  ', '291': '  /* Common GPIO configuration */', '292': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '293': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '294': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '295': '  gpio_init_structure.Alternate = GPIO_AF12_FMC;', '296': '  ', '297': '  /* GPIOD configuration */', '298': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8     |\\\\', '299': '                              GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |\\\\', '300': '                              GPIO_PIN_14 | GPIO_PIN_15;', '301': '  HAL_GPIO_Init(GPIOD, &gpio_init_structure);', '302': '', '303': '  /* GPIOE configuration */  ', '304': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3| GPIO_PIN_4 | GPIO_PIN_7     |\\\\', '305': '                              GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 |\\\\', '306': '                              GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;', '307': '  HAL_GPIO_Init(GPIOE, &gpio_init_structure);', '308': '  ', '309': '  /* GPIOF configuration */  ', '310': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\', '311': '                              GPIO_PIN_5 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;', '312': '  HAL_GPIO_Init(GPIOF, &gpio_init_structure);', '313': '  ', '314': '  /* GPIOG configuration */  ', '315': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\', '316': '                              GPIO_PIN_5 | GPIO_PIN_6;', '317': '  HAL_GPIO_Init(GPIOG, &gpio_init_structure);  ', '318': '  ', '319': '  /* Configure common DMA parameters */', '320': '  dma_handle.Init.Channel             = SRAM_DMAx_CHANNEL;', '321': '  dma_handle.Init.Direction           = DMA_MEMORY_TO_MEMORY;', '322': '  dma_handle.Init.PeriphInc           = DMA_PINC_ENABLE;', '323': '  dma_handle.Init.MemInc              = DMA_MINC_ENABLE;', '324': '  dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;', '325': '  dma_handle.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;', '326': '  dma_handle.Init.Mode                = DMA_NORMAL;', '327': '  dma_handle.Init.Priority            = DMA_PRIORITY_HIGH;', '328': '  dma_handle.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;', '329': '  dma_handle.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;', '330': '  dma_handle.Init.MemBurst            = DMA_MBURST_SINGLE;', '331': '  dma_handle.Init.PeriphBurst         = DMA_PBURST_SINGLE;', '332': '  ', '333': '  dma_handle.Instance = SRAM_DMAx_STREAM;', '334': '  ', '335': '   /* Associate the DMA handle */', '336': '  __HAL_LINKDMA(hsram, hdma, dma_handle);', '337': '  ', '338': '  /* Deinitialize the Stream for new transfer */', '339': '  HAL_DMA_DeInit(&dma_handle);', '340': '  ', '341': '  /* Configure the DMA Stream */', '342': '  HAL_DMA_Init(&dma_handle);', '343': '  ', '344': '  /* NVIC configuration for DMA transfer complete interrupt */', '345': '  HAL_NVIC_SetPriority(SRAM_DMAx_IRQn, 0x0F, 0);', '346': '  HAL_NVIC_EnableIRQ(SRAM_DMAx_IRQn);   ', '347': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "579a569a-adcc-4368-b947-959470f46eec",
+      "tool_call_id": "call_00_weRWCU64JjmrUsoteymMEXfH",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_k3Xz5KS4r5ay2tolGro0EDiC",
+            "function": {
+              "arguments": "{\"func_name\": \"BSP_SRAM_MspInit\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 43,
+          "prompt_tokens": 4437,
+          "total_tokens": 4480,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 2773
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--c6210069-018e-4dbe-9b03-c149e5c6f64d-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "BSP_SRAM_MspInit"
+          },
+          "id": "call_00_k3Xz5KS4r5ay2tolGro0EDiC",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4437,
+        "output_tokens": 43,
+        "total_tokens": 4480,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', location_line=274, function_content='/**\\n* @brief  Initializes SRAM MSP.\\n* @param  hsram: SRAM handle\\n* @param  Params\\n* @retval None\\n*/\\n__weak void BSP_SRAM_MspInit(SRAM_HandleTypeDef  *hsram, void *Params)\\n{  \\n  static DMA_HandleTypeDef dma_handle;\\n  GPIO_InitTypeDef gpio_init_structure;\\n  \\n  /* Enable FMC clock */\\n  __HAL_RCC_FMC_CLK_ENABLE();\\n  \\n  /* Enable chosen DMAx clock */\\n  __SRAM_DMAx_CLK_ENABLE();\\n\\n  /* Enable GPIOs clock */\\n  __HAL_RCC_GPIOD_CLK_ENABLE();\\n  __HAL_RCC_GPIOE_CLK_ENABLE();\\n  __HAL_RCC_GPIOF_CLK_ENABLE();\\n  __HAL_RCC_GPIOG_CLK_ENABLE();\\n  \\n  /* Common GPIO configuration */\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF12_FMC;\\n  \\n  /* GPIOD configuration */\\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8     |\\\\\\n                              GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |\\\\\\n                              GPIO_PIN_14 | GPIO_PIN_15;\\n  HAL_GPIO_Init(GPIOD, &gpio_init_structure);\\n\\n  /* GPIOE configuration */  \\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3| GPIO_PIN_4 | GPIO_PIN_7     |\\\\\\n                              GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 |\\\\\\n                              GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;\\n  HAL_GPIO_Init(GPIOE, &gpio_init_structure);\\n  \\n  /* GPIOF configuration */  \\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\\\n                              GPIO_PIN_5 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;\\n  HAL_GPIO_Init(GPIOF, &gpio_init_structure);\\n  \\n  /* GPIOG configuration */  \\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\\\n                              GPIO_PIN_5 | GPIO_PIN_6;\\n  HAL_GPIO_Init(GPIOG, &gpio_init_structure);  \\n  \\n  /* Configure common DMA parameters */\\n  dma_handle.Init.Channel             = SRAM_DMAx_CHANNEL;\\n  dma_handle.Init.Direction           = DMA_MEMORY_TO_MEMORY;\\n  dma_handle.Init.PeriphInc           = DMA_PINC_ENABLE;\\n  dma_handle.Init.MemInc              = DMA_MINC_ENABLE;\\n  dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;\\n  dma_handle.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;\\n  dma_handle.Init.Mode                = DMA_NORMAL;\\n  dma_handle.Init.Priority            = DMA_PRIORITY_HIGH;\\n  dma_handle.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;\\n  dma_handle.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;\\n  dma_handle.Init.MemBurst            = DMA_MBURST_SINGLE;\\n  dma_handle.Init.PeriphBurst         = DMA_PBURST_SINGLE;\\n  \\n  dma_handle.Instance = SRAM_DMAx_STREAM;\\n  \\n   /* Associate the DMA handle */\\n  __HAL_LINKDMA(hsram, hdma, dma_handle);\\n  \\n  /* Deinitialize the Stream for new transfer */\\n  HAL_DMA_DeInit(&dma_handle);\\n  \\n  /* Configure the DMA Stream */\\n  HAL_DMA_Init(&dma_handle);\\n  \\n  /* NVIC configuration for DMA transfer complete interrupt */\\n  HAL_NVIC_SetPriority(SRAM_DMAx_IRQn, 0x0F, 0);\\n  HAL_NVIC_EnableIRQ(SRAM_DMAx_IRQn);   \\n}\\n', function_content_in_lines={'274': '__weak void BSP_SRAM_MspInit(SRAM_HandleTypeDef  *hsram, void *Params)', '275': '{  ', '276': '  static DMA_HandleTypeDef dma_handle;', '277': '  GPIO_InitTypeDef gpio_init_structure;', '278': '  ', '279': '  /* Enable FMC clock */', '280': '  __HAL_RCC_FMC_CLK_ENABLE();', '281': '  ', '282': '  /* Enable chosen DMAx clock */', '283': '  __SRAM_DMAx_CLK_ENABLE();', '284': '', '285': '  /* Enable GPIOs clock */', '286': '  __HAL_RCC_GPIOD_CLK_ENABLE();', '287': '  __HAL_RCC_GPIOE_CLK_ENABLE();', '288': '  __HAL_RCC_GPIOF_CLK_ENABLE();', '289': '  __HAL_RCC_GPIOG_CLK_ENABLE();', '290': '  ', '291': '  /* Common GPIO configuration */', '292': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '293': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '294': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '295': '  gpio_init_structure.Alternate = GPIO_AF12_FMC;', '296': '  ', '297': '  /* GPIOD configuration */', '298': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8     |\\\\', '299': '                              GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |\\\\', '300': '                              GPIO_PIN_14 | GPIO_PIN_15;', '301': '  HAL_GPIO_Init(GPIOD, &gpio_init_structure);', '302': '', '303': '  /* GPIOE configuration */  ', '304': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3| GPIO_PIN_4 | GPIO_PIN_7     |\\\\', '305': '                              GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 |\\\\', '306': '                              GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;', '307': '  HAL_GPIO_Init(GPIOE, &gpio_init_structure);', '308': '  ', '309': '  /* GPIOF configuration */  ', '310': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\', '311': '                              GPIO_PIN_5 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;', '312': '  HAL_GPIO_Init(GPIOF, &gpio_init_structure);', '313': '  ', '314': '  /* GPIOG configuration */  ', '315': '  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\\', '316': '                              GPIO_PIN_5 | GPIO_PIN_6;', '317': '  HAL_GPIO_Init(GPIOG, &gpio_init_structure);  ', '318': '  ', '319': '  /* Configure common DMA parameters */', '320': '  dma_handle.Init.Channel             = SRAM_DMAx_CHANNEL;', '321': '  dma_handle.Init.Direction           = DMA_MEMORY_TO_MEMORY;', '322': '  dma_handle.Init.PeriphInc           = DMA_PINC_ENABLE;', '323': '  dma_handle.Init.MemInc              = DMA_MINC_ENABLE;', '324': '  dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;', '325': '  dma_handle.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;', '326': '  dma_handle.Init.Mode                = DMA_NORMAL;', '327': '  dma_handle.Init.Priority            = DMA_PRIORITY_HIGH;', '328': '  dma_handle.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;', '329': '  dma_handle.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;', '330': '  dma_handle.Init.MemBurst            = DMA_MBURST_SINGLE;', '331': '  dma_handle.Init.PeriphBurst         = DMA_PBURST_SINGLE;', '332': '  ', '333': '  dma_handle.Instance = SRAM_DMAx_STREAM;', '334': '  ', '335': '   /* Associate the DMA handle */', '336': '  __HAL_LINKDMA(hsram, hdma, dma_handle);', '337': '  ', '338': '  /* Deinitialize the Stream for new transfer */', '339': '  HAL_DMA_DeInit(&dma_handle);', '340': '  ', '341': '  /* Configure the DMA Stream */', '342': '  HAL_DMA_Init(&dma_handle);', '343': '  ', '344': '  /* NVIC configuration for DMA transfer complete interrupt */', '345': '  HAL_NVIC_SetPriority(SRAM_DMAx_IRQn, 0x0F, 0);', '346': '  HAL_NVIC_EnableIRQ(SRAM_DMAx_IRQn);   ', '347': '}'})\nMMIO Exprs info: [MmioExprInfo(name='Direction', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=321, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=280, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=283, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=286, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=287, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=288, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=289, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=292, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=326, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Priority', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=327, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=295, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=294, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=293, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=298, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=304, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=310, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=315, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='PeriphBurst', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=331, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='MemBurst', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=330, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='FIFOThreshold', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=329, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='FIFOMode', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=328, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='MemDataAlignment', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=325, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='PeriphDataAlignment', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=324, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='MemInc', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=323, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='PeriphInc', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=322, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Channel', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=320, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='... & ...', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=280, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=283, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=286, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=287, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=288, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=289, expr_type='binary', enclosing_type='assign_to')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "21af1d6e-86dc-413a-821b-7388b5c7da78",
+      "tool_call_id": "call_00_k3Xz5KS4r5ay2tolGro0EDiC",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_dRIOxxwTpXsxM9dVHZp2HTHp",
+            "function": {
+              "arguments": "{\"func_name\": \"BSP_SRAM_MspInit\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 9792,
+          "total_tokens": 9829,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4416
+          },
+          "prompt_cache_hit_tokens": 4416,
+          "prompt_cache_miss_tokens": 5376
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--7b6f5ed7-fbd8-4f07-a86b-3692a9d65bc8-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "BSP_SRAM_MspInit"
+          },
+          "id": "call_00_dRIOxxwTpXsxM9dVHZp2HTHp",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9792,
+        "output_tokens": 37,
+        "total_tokens": 9829,
+        "input_token_details": {
+          "cache_read": 4416
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=301, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOD, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=307, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOE, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=312, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOF, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=317, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOG, &gpio_init_structure);  '), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_DMA_DeInit', call_tag='call to HAL_DMA_DeInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=339, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_DMA_DeInit(&dma_handle);'), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_DMA_Init', call_tag='call to HAL_DMA_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=342, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_DMA_Init(&dma_handle);'), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_NVIC_EnableIRQ', call_tag='call to HAL_NVIC_EnableIRQ', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=346, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_NVIC_EnableIRQ(SRAM_DMAx_IRQn);   '), FunctionCallInfo(caller_name='BSP_SRAM_MspInit', callee_name='HAL_NVIC_SetPriority', call_tag='call to HAL_NVIC_SetPriority', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=345, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_NVIC_SetPriority(SRAM_DMAx_IRQn, 0x0F, 0);')]\nFunction call from info: [FunctionCallInfo(caller_name='BSP_SRAM_Init', callee_name='BSP_SRAM_MspInit', call_tag='call to BSP_SRAM_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', start_line=154, call_type='direct', ret_type='noReturnValue', start_line_content='  BSP_SRAM_MspInit(&sramHandle, NULL); /* __weak function can be rewritten by the application */')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "763889a3-e72d-4311-a964-947e5751e1ad",
+      "tool_call_id": "call_00_dRIOxxwTpXsxM9dVHZp2HTHp",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the `BSP_SRAM_MspInit` function, I can now provide the classification:\n\n## Classification: **INIT** (Initialization Function)\n\n### Reasoning:\n\n1. **Function Purpose**: The function is clearly an initialization function as indicated by:\n   - The function name `BSP_SRAM_MspInit` (MSP stands for MCU Specific Package initialization)\n   - The comment documentation: \"Initializes SRAM MSP\"\n   - It's called from `BSP_SRAM_Init` during the SRAM initialization process\n\n2. **Function Content Analysis**:\n   - **Clock Enable Operations**: Enables FMC clock, DMA clock, and multiple GPIO clocks\n   - **GPIO Configuration**: Configures multiple GPIO pins (GPIOD, GPIOE, GPIOF, GPIOG) for FMC alternate function\n   - **DMA Configuration**: Sets up DMA parameters for memory-to-memory transfers\n   - **Interrupt Configuration**: Configures NVIC priority and enables DMA transfer complete interrupt\n\n3. **Key Characteristics**:\n   - No data transmission/reception operations (not RECV type)\n   - Contains interrupt enable operations but is not an interrupt handler itself (not IRQ type)\n   - Performs comprehensive hardware initialization for SRAM peripheral\n   - Sets up DMA and interrupt infrastructure for SRAM operations\n   - The function is marked as `__weak` meaning it can be overridden by application code\n\n4. **Replacement Strategy**:\n   - Remove MMIO/register access operations (clock enables, GPIO init calls)\n   - Preserve the initialization logic structure\n   - Keep the DMA handle configuration and association with SRAM handle\n   - Maintain interrupt configuration logic (priority setting and enable)\n   - Ensure the state machine remains correct after initialization\n\nThis function is a classic peripheral initialization function that sets up the hardware infrastructure for SRAM operations including GPIO configuration, DMA setup, and interrupt configuration. It should be classified as INIT for priority replacement.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 409,
+          "prompt_tokens": 10977,
+          "total_tokens": 11386,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 9792
+          },
+          "prompt_cache_hit_tokens": 9792,
+          "prompt_cache_miss_tokens": 1185
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--1b3164ae-9652-43e3-a8ed-d5d35edba209-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 10977,
+        "output_tokens": 409,
+        "total_tokens": 11386,
+        "input_token_details": {
+          "cache_read": 9792
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "BSP_SRAM_MspInit",
+    "function_type": "INIT",
+    "functionality": "Initializes SRAM MCU Specific Package (MSP) including clock enables, GPIO configuration for FMC interface, DMA setup for memory-to-memory transfers, and interrupt configuration for DMA transfer completion",
+    "classification_reason": "This is a peripheral initialization function that sets up hardware infrastructure for SRAM operations. It performs clock enables, GPIO configuration, DMA parameter setup, and interrupt configuration. The function is called during SRAM initialization and is marked as __weak for potential application override. It contains no data transmission/reception operations and is not an interrupt handler itself, making it suitable for INIT classification.",
+    "has_replacement": true,
+    "function_replacement": "__weak void BSP_SRAM_MspInit(SRAM_HandleTypeDef  *hsram, void *Params)\n{  \n  static DMA_HandleTypeDef dma_handle;\n  GPIO_InitTypeDef gpio_init_structure;\n  \n  /* Clock enable operations removed for POSIX compatibility */\n  \n  /* GPIO configuration structure setup preserved */\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\n  gpio_init_structure.Pull      = GPIO_PULLUP;\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\n  gpio_init_structure.Alternate = GPIO_AF12_FMC;\n  \n  /* GPIO pin configurations preserved for reference */\n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8     |\\\n                              GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 |\\\n                              GPIO_PIN_14 | GPIO_PIN_15;\n  \n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3| GPIO_PIN_4 | GPIO_PIN_7     |\\\n                              GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 |\\\n                              GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;\n  \n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\n                              GPIO_PIN_5 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;\n  \n  gpio_init_structure.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2| GPIO_PIN_3 | GPIO_PIN_4     |\\\n                              GPIO_PIN_5 | GPIO_PIN_6;\n  \n  /* Configure common DMA parameters - preserved for state management */\n  dma_handle.Init.Channel             = SRAM_DMAx_CHANNEL;\n  dma_handle.Init.Direction           = DMA_MEMORY_TO_MEMORY;\n  dma_handle.Init.PeriphInc           = DMA_PINC_ENABLE;\n  dma_handle.Init.MemInc              = DMA_MINC_ENABLE;\n  dma_handle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;\n  dma_handle.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;\n  dma_handle.Init.Mode                = DMA_NORMAL;\n  dma_handle.Init.Priority            = DMA_PRIORITY_HIGH;\n  dma_handle.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;\n  dma_handle.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;\n  dma_handle.Init.MemBurst            = DMA_MBURST_SINGLE;\n  dma_handle.Init.PeriphBurst         = DMA_PBURST_SINGLE;\n  \n  dma_handle.Instance = SRAM_DMAx_STREAM;\n  \n   /* Associate the DMA handle - preserved for state management */\n  __HAL_LINKDMA(hsram, hdma, dma_handle);\n  \n  /* DMA operations removed for POSIX compatibility */\n  \n  /* NVIC configuration preserved for interrupt management */\n  HAL_NVIC_SetPriority(SRAM_DMAx_IRQn, 0x0F, 0);\n  HAL_NVIC_EnableIRQ(SRAM_DMAx_IRQn);   \n}"
+  }
+}

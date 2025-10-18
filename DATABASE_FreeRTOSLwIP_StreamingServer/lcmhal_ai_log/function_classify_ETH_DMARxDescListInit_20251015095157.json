@@ -1,0 +1,348 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "fc0f4c88-2d33-4444-9809-4cdc22146fc7"
+    },
+    {
+      "content": "Classify the function : ETH_DMARxDescListInit",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "0c85019c-2abc-496e-b3ea-013188bdab3b",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `ETH_DMARxDescListInit` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_Z8H0YivmrERZk2Si8SpE86mG",
+            "function": {
+              "arguments": "{\"func_name\": \"ETH_DMARxDescListInit\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 54,
+          "prompt_tokens": 1672,
+          "total_tokens": 1726,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1600
+          },
+          "prompt_cache_hit_tokens": 1600,
+          "prompt_cache_miss_tokens": 72
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--dec4549b-22a6-44ed-baa5-cc6b377d4515-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "ETH_DMARxDescListInit"
+          },
+          "id": "call_00_Z8H0YivmrERZk2Si8SpE86mG",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1672,
+        "output_tokens": 54,
+        "total_tokens": 1726,
+        "input_token_details": {
+          "cache_read": 1600
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', location_line=2996, function_content='/**\\n* @brief  Initializes the DMA Rx descriptors in chain mode.\\n*         called by HAL_ETH_Init() API.\\n* @param  heth: pointer to a ETH_HandleTypeDef structure that contains\\n*         the configuration information for ETHERNET module\\n* @retval None\\n*/\\nstatic void ETH_DMARxDescListInit(ETH_HandleTypeDef *heth)\\n{\\n  ETH_DMADescTypeDef *dmarxdesc;\\n  uint32_t i;\\n\\n  for (i = 0; i < (uint32_t)ETH_RX_DESC_CNT; i++)\\n  {\\n    dmarxdesc =  heth->Init.RxDesc + i;\\n\\n    WRITE_REG(dmarxdesc->DESC0, 0x0U);\\n    WRITE_REG(dmarxdesc->DESC1, 0x0U);\\n    WRITE_REG(dmarxdesc->DESC2, 0x0U);\\n    WRITE_REG(dmarxdesc->DESC3, 0x0U);\\n    WRITE_REG(dmarxdesc->BackupAddr0, 0x0U);\\n    WRITE_REG(dmarxdesc->BackupAddr1, 0x0U);\\n\\n    /* Set Own bit of the Rx descriptor Status */\\n    dmarxdesc->DESC0 = ETH_DMARXDESC_OWN;\\n\\n    /* Set Buffer1 size and Second Address Chained bit */\\n    dmarxdesc->DESC1 = heth->Init.RxBuffLen | ETH_DMARXDESC_RCH;\\n\\n    /* Enable Ethernet DMA Rx Descriptor interrupt */\\n    dmarxdesc->DESC1 &= ~ETH_DMARXDESC_DIC;\\n    /* Set Rx descritors addresses */\\n    WRITE_REG(heth->RxDescList.RxDesc[i], (uint32_t)dmarxdesc);\\n\\n    if (i < ((uint32_t)ETH_RX_DESC_CNT - 1U))\\n    {\\n      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc + i + 1U));\\n    }\\n    else\\n    {\\n      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc));\\n    }\\n  }\\n\\n  WRITE_REG(heth->RxDescList.RxDescIdx, 0U);\\n  WRITE_REG(heth->RxDescList.RxDescCnt, 0U);\\n  WRITE_REG(heth->RxDescList.RxBuildDescIdx, 0U);\\n  WRITE_REG(heth->RxDescList.RxBuildDescCnt, 0U);\\n  WRITE_REG(heth->RxDescList.ItMode, 0U);\\n\\n  /* Set Receive Descriptor List Address */\\n  WRITE_REG(heth->Instance->DMARDLAR, (uint32_t) heth->Init.RxDesc);\\n}\\n', function_content_in_lines={'2996': 'static void ETH_DMARxDescListInit(ETH_HandleTypeDef *heth)', '2997': '{', '2998': '  ETH_DMADescTypeDef *dmarxdesc;', '2999': '  uint32_t i;', '3000': '', '3001': '  for (i = 0; i < (uint32_t)ETH_RX_DESC_CNT; i++)', '3002': '  {', '3003': '    dmarxdesc =  heth->Init.RxDesc + i;', '3004': '', '3005': '    WRITE_REG(dmarxdesc->DESC0, 0x0U);', '3006': '    WRITE_REG(dmarxdesc->DESC1, 0x0U);', '3007': '    WRITE_REG(dmarxdesc->DESC2, 0x0U);', '3008': '    WRITE_REG(dmarxdesc->DESC3, 0x0U);', '3009': '    WRITE_REG(dmarxdesc->BackupAddr0, 0x0U);', '3010': '    WRITE_REG(dmarxdesc->BackupAddr1, 0x0U);', '3011': '', '3012': '    /* Set Own bit of the Rx descriptor Status */', '3013': '    dmarxdesc->DESC0 = ETH_DMARXDESC_OWN;', '3014': '', '3015': '    /* Set Buffer1 size and Second Address Chained bit */', '3016': '    dmarxdesc->DESC1 = heth->Init.RxBuffLen | ETH_DMARXDESC_RCH;', '3017': '', '3018': '    /* Enable Ethernet DMA Rx Descriptor interrupt */', '3019': '    dmarxdesc->DESC1 &= ~ETH_DMARXDESC_DIC;', '3020': '    /* Set Rx descritors addresses */', '3021': '    WRITE_REG(heth->RxDescList.RxDesc[i], (uint32_t)dmarxdesc);', '3022': '', '3023': '    if (i < ((uint32_t)ETH_RX_DESC_CNT - 1U))', '3024': '    {', '3025': '      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc + i + 1U));', '3026': '    }', '3027': '    else', '3028': '    {', '3029': '      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc));', '3030': '    }', '3031': '  }', '3032': '', '3033': '  WRITE_REG(heth->RxDescList.RxDescIdx, 0U);', '3034': '  WRITE_REG(heth->RxDescList.RxDescCnt, 0U);', '3035': '  WRITE_REG(heth->RxDescList.RxBuildDescIdx, 0U);', '3036': '  WRITE_REG(heth->RxDescList.RxBuildDescCnt, 0U);', '3037': '  WRITE_REG(heth->RxDescList.ItMode, 0U);', '3038': '', '3039': '  /* Set Receive Descriptor List Address */', '3040': '  WRITE_REG(heth->Instance->DMARDLAR, (uint32_t) heth->Init.RxDesc);', '3041': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "2eec4110-97de-49f2-8626-21d09272d0d3",
+      "tool_call_id": "call_00_Z8H0YivmrERZk2Si8SpE86mG",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check if this function uses any MMIO operations:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_afSKWRlg80zB2hbsuzK8YrCc",
+            "function": {
+              "arguments": "{\"func_name\": \"ETH_DMARxDescListInit\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 3342,
+          "total_tokens": 3379,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 1678
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--e528cff9-b189-49b7-a6f4-ca91f105818a-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "ETH_DMARxDescListInit"
+          },
+          "id": "call_00_afSKWRlg80zB2hbsuzK8YrCc",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3342,
+        "output_tokens": 37,
+        "total_tokens": 3379,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', location_line=2996, function_content='/**\\n* @brief  Initializes the DMA Rx descriptors in chain mode.\\n*         called by HAL_ETH_Init() API.\\n* @param  heth: pointer to a ETH_HandleTypeDef structure that contains\\n*         the configuration information for ETHERNET module\\n* @retval None\\n*/\\nstatic void ETH_DMARxDescListInit(ETH_HandleTypeDef *heth)\\n{\\n  ETH_DMADescTypeDef *dmarxdesc;\\n  uint32_t i;\\n\\n  for (i = 0; i < (uint32_t)ETH_RX_DESC_CNT; i++)\\n  {\\n    dmarxdesc =  heth->Init.RxDesc + i;\\n\\n    WRITE_REG(dmarxdesc->DESC0, 0x0U);\\n    WRITE_REG(dmarxdesc->DESC1, 0x0U);\\n    WRITE_REG(dmarxdesc->DESC2, 0x0U);\\n    WRITE_REG(dmarxdesc->DESC3, 0x0U);\\n    WRITE_REG(dmarxdesc->BackupAddr0, 0x0U);\\n    WRITE_REG(dmarxdesc->BackupAddr1, 0x0U);\\n\\n    /* Set Own bit of the Rx descriptor Status */\\n    dmarxdesc->DESC0 = ETH_DMARXDESC_OWN;\\n\\n    /* Set Buffer1 size and Second Address Chained bit */\\n    dmarxdesc->DESC1 = heth->Init.RxBuffLen | ETH_DMARXDESC_RCH;\\n\\n    /* Enable Ethernet DMA Rx Descriptor interrupt */\\n    dmarxdesc->DESC1 &= ~ETH_DMARXDESC_DIC;\\n    /* Set Rx descritors addresses */\\n    WRITE_REG(heth->RxDescList.RxDesc[i], (uint32_t)dmarxdesc);\\n\\n    if (i < ((uint32_t)ETH_RX_DESC_CNT - 1U))\\n    {\\n      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc + i + 1U));\\n    }\\n    else\\n    {\\n      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc));\\n    }\\n  }\\n\\n  WRITE_REG(heth->RxDescList.RxDescIdx, 0U);\\n  WRITE_REG(heth->RxDescList.RxDescCnt, 0U);\\n  WRITE_REG(heth->RxDescList.RxBuildDescIdx, 0U);\\n  WRITE_REG(heth->RxDescList.RxBuildDescCnt, 0U);\\n  WRITE_REG(heth->RxDescList.ItMode, 0U);\\n\\n  /* Set Receive Descriptor List Address */\\n  WRITE_REG(heth->Instance->DMARDLAR, (uint32_t) heth->Init.RxDesc);\\n}\\n', function_content_in_lines={'2996': 'static void ETH_DMARxDescListInit(ETH_HandleTypeDef *heth)', '2997': '{', '2998': '  ETH_DMADescTypeDef *dmarxdesc;', '2999': '  uint32_t i;', '3000': '', '3001': '  for (i = 0; i < (uint32_t)ETH_RX_DESC_CNT; i++)', '3002': '  {', '3003': '    dmarxdesc =  heth->Init.RxDesc + i;', '3004': '', '3005': '    WRITE_REG(dmarxdesc->DESC0, 0x0U);', '3006': '    WRITE_REG(dmarxdesc->DESC1, 0x0U);', '3007': '    WRITE_REG(dmarxdesc->DESC2, 0x0U);', '3008': '    WRITE_REG(dmarxdesc->DESC3, 0x0U);', '3009': '    WRITE_REG(dmarxdesc->BackupAddr0, 0x0U);', '3010': '    WRITE_REG(dmarxdesc->BackupAddr1, 0x0U);', '3011': '', '3012': '    /* Set Own bit of the Rx descriptor Status */', '3013': '    dmarxdesc->DESC0 = ETH_DMARXDESC_OWN;', '3014': '', '3015': '    /* Set Buffer1 size and Second Address Chained bit */', '3016': '    dmarxdesc->DESC1 = heth->Init.RxBuffLen | ETH_DMARXDESC_RCH;', '3017': '', '3018': '    /* Enable Ethernet DMA Rx Descriptor interrupt */', '3019': '    dmarxdesc->DESC1 &= ~ETH_DMARXDESC_DIC;', '3020': '    /* Set Rx descritors addresses */', '3021': '    WRITE_REG(heth->RxDescList.RxDesc[i], (uint32_t)dmarxdesc);', '3022': '', '3023': '    if (i < ((uint32_t)ETH_RX_DESC_CNT - 1U))', '3024': '    {', '3025': '      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc + i + 1U));', '3026': '    }', '3027': '    else', '3028': '    {', '3029': '      WRITE_REG(dmarxdesc->DESC3, (uint32_t)(heth->Init.RxDesc));', '3030': '    }', '3031': '  }', '3032': '', '3033': '  WRITE_REG(heth->RxDescList.RxDescIdx, 0U);', '3034': '  WRITE_REG(heth->RxDescList.RxDescCnt, 0U);', '3035': '  WRITE_REG(heth->RxDescList.RxBuildDescIdx, 0U);', '3036': '  WRITE_REG(heth->RxDescList.RxBuildDescCnt, 0U);', '3037': '  WRITE_REG(heth->RxDescList.ItMode, 0U);', '3038': '', '3039': '  /* Set Receive Descriptor List Address */', '3040': '  WRITE_REG(heth->Instance->DMARDLAR, (uint32_t) heth->Init.RxDesc);', '3041': '}'})\nMMIO Exprs info: [MmioExprInfo(name='i', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3001, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='i', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3001, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='i', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3003, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='i', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3003, expr_type='varaccess', enclosing_type='arithmetic'), MmioExprInfo(name='i', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3023, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='i', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3025, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RxBuffLen', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3016, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='RxDesc', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3003, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='RxDesc', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3003, expr_type='varaccess', enclosing_type='arithmetic'), MmioExprInfo(name='RxDesc', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3025, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RxDesc', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3029, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RxDesc', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3040, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RxBuildDescIdx', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3035, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='~ ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3019, expr_type='unary', enclosing_type='skip'), MmioExprInfo(name='... &= ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3019, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... + ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3025, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... ++', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3001, expr_type='unary', enclosing_type='control_flow'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3005, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3006, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3007, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3008, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3009, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3010, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3025, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3029, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=3040, expr_type='assign', enclosing_type='stmt')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "24f8df4f-963c-4c34-a421-42971b2089fb",
+      "tool_call_id": "call_00_afSKWRlg80zB2hbsuzK8YrCc",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_Df3iLjSMOt0EZvm1CnQMbBGt",
+            "function": {
+              "arguments": "{\"func_name\": \"ETH_DMARxDescListInit\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 7164,
+          "total_tokens": 7201,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3328
+          },
+          "prompt_cache_hit_tokens": 3328,
+          "prompt_cache_miss_tokens": 3836
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--d47e08bf-ce99-432f-9f9c-cf4552cb535f-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "ETH_DMARxDescListInit"
+          },
+          "id": "call_00_Df3iLjSMOt0EZvm1CnQMbBGt",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 7164,
+        "output_tokens": 37,
+        "total_tokens": 7201,
+        "input_token_details": {
+          "cache_read": 3328
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: []\nFunction call from info: [FunctionCallInfo(caller_name='HAL_ETH_Init', callee_name='ETH_DMARxDescListInit', call_tag='call to ETH_DMARxDescListInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=405, call_type='direct', ret_type='noReturnValue', start_line_content='  ETH_DMARxDescListInit(heth);')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "c6851944-d357-4a9a-aa3f-48590df29d3e",
+      "tool_call_id": "call_00_Df3iLjSMOt0EZvm1CnQMbBGt",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the structure definitions to better understand the data structures involved:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_SLbl2eyYHdkQ7yHxzacL4str",
+            "function": {
+              "arguments": "{\"struct_name\": \"ETH_HandleTypeDef\"}",
+              "name": "collect_struct_or_enum_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 7337,
+          "total_tokens": 7374,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 7168
+          },
+          "prompt_cache_hit_tokens": 7168,
+          "prompt_cache_miss_tokens": 169
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--4ef4a51e-348c-497e-93f5-052d49451d53-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "ETH_HandleTypeDef"
+          },
+          "id": "call_00_SLbl2eyYHdkQ7yHxzacL4str",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 7337,
+        "output_tokens": 37,
+        "total_tokens": 7374,
+        "input_token_details": {
+          "cache_read": 7168
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='ETH_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_eth.h', location_line=527, struct_content='#endif /* USE_HAL_ETH_REGISTER_CALLBACKS */\\n{\\n  ETH_TypeDef                *Instance;                 /*!< Register base address       */\\n\\n  ETH_InitTypeDef            Init;                      /*!< Ethernet Init Configuration */\\n\\n  ETH_TxDescListTypeDef      TxDescList;                /*!< Tx descriptor wrapper: holds all Tx descriptors list\\n                                                            addresses and current descriptor index  */\\n\\n  ETH_RxDescListTypeDef      RxDescList;                /*!< Rx descriptor wrapper: holds all Rx descriptors list\\n                                                            addresses and current descriptor index  */\\n\\n#ifdef HAL_ETH_USE_PTP\\n  ETH_TimeStampTypeDef       TxTimestamp;               /*!< Tx Timestamp */\\n#endif /* HAL_ETH_USE_PTP */\\n\\n  __IO HAL_ETH_StateTypeDef  gState;                   /*!< ETH state information related to global Handle management\\n                                                              and also related to Tx operations. This parameter can\\n                                                              be a value of @ref ETH_State_Codes */\\n\\n  __IO uint32_t              ErrorCode;                 /*!< Holds the global Error code of the ETH HAL status machine\\n                                                             This parameter can be a value of @ref ETH_Error_Code.*/\\n\\n  __IO uint32_t\\n  DMAErrorCode;              /*!< Holds the DMA Rx Tx Error code when a DMA AIS interrupt occurs\\n                                                             This parameter can be a combination of\\n                                                             @ref ETH_DMA_Status_Flags */\\n\\n  __IO uint32_t\\n  MACErrorCode;              /*!< Holds the MAC Rx Tx Error code when a MAC Rx or Tx status interrupt occurs\\n                                                             This parameter can be a combination of\\n                                                             @ref ETH_MAC_Rx_Tx_Status */\\n\\n  __IO uint32_t              MACWakeUpEvent;            /*!< Holds the Wake Up event when the MAC exit the power down mode\\n                                                             This parameter can be a value of\\n                                                             @ref ETH_MAC_Wake_Up_Event */\\n\\n  __IO uint32_t              MACLPIEvent;               /*!< Holds the LPI event when the an LPI status interrupt occurs.\\n                                                             This parameter can be a value of @ref ETHEx_LPI_Event */\\n\\n  __IO uint32_t              IsPtpConfigured;           /*!< Holds the PTP configuration status.\\n                                                             This parameter can be a value of\\n                                                             @ref ETH_PTP_Config_Status */\\n\\n#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)\\n\\n  void (* TxCpltCallback)(struct __ETH_HandleTypeDef *heth);             /*!< ETH Tx Complete Callback */\\n  void (* RxCpltCallback)(struct __ETH_HandleTypeDef *heth);            /*!< ETH Rx  Complete Callback     */\\n  void (* ErrorCallback)(struct __ETH_HandleTypeDef *heth);             /*!< ETH Error Callback   */\\n  void (* PMTCallback)(struct __ETH_HandleTypeDef *heth);               /*!< ETH Power Management Callback            */\\n  void (* WakeUpCallback)(struct __ETH_HandleTypeDef *heth);            /*!< ETH Wake UP Callback   */\\n\\n  void (* MspInitCallback)(struct __ETH_HandleTypeDef *heth);             /*!< ETH Msp Init callback              */\\n  void (* MspDeInitCallback)(struct __ETH_HandleTypeDef *heth);           /*!< ETH Msp DeInit callback            */\\n\\n#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */\\n\\n  pETH_rxAllocateCallbackTypeDef  rxAllocateCallback;  /*!< ETH Rx Get Buffer Function   */\\n  pETH_rxLinkCallbackTypeDef      rxLinkCallback; /*!< ETH Rx Set App Data Function */\\n  pETH_txFreeCallbackTypeDef      txFreeCallback;       /*!< ETH Tx Free Function         */\\n  pETH_txPtpCallbackTypeDef       txPtpCallback;  /*!< ETH Tx Handle Ptp Function */\\n\\n} ETH_HandleTypeDef;\\n', struct_content_in_lines={'527': '{', '528': '  ETH_TypeDef                *Instance;                 /*!< Register base address       */', '529': '', '530': '  ETH_InitTypeDef            Init;                      /*!< Ethernet Init Configuration */', '531': '', '532': '  ETH_TxDescListTypeDef      TxDescList;                /*!< Tx descriptor wrapper: holds all Tx descriptors list', '533': '                                                            addresses and current descriptor index  */', '534': '', '535': '  ETH_RxDescListTypeDef      RxDescList;                /*!< Rx descriptor wrapper: holds all Rx descriptors list', '536': '                                                            addresses and current descriptor index  */', '537': '', '538': '#ifdef HAL_ETH_USE_PTP', '539': '  ETH_TimeStampTypeDef       TxTimestamp;               /*!< Tx Timestamp */', '540': '#endif /* HAL_ETH_USE_PTP */', '541': '', '542': '  __IO HAL_ETH_StateTypeDef  gState;                   /*!< ETH state information related to global Handle management', '543': '                                                              and also related to Tx operations. This parameter can', '544': '                                                              be a value of @ref ETH_State_Codes */', '545': '', '546': '  __IO uint32_t              ErrorCode;                 /*!< Holds the global Error code of the ETH HAL status machine', '547': '                                                             This parameter can be a value of @ref ETH_Error_Code.*/', '548': '', '549': '  __IO uint32_t', '550': '  DMAErrorCode;              /*!< Holds the DMA Rx Tx Error code when a DMA AIS interrupt occurs', '551': '                                                             This parameter can be a combination of', '552': '                                                             @ref ETH_DMA_Status_Flags */', '553': '', '554': '  __IO uint32_t', '555': '  MACErrorCode;              /*!< Holds the MAC Rx Tx Error code when a MAC Rx or Tx status interrupt occurs', '556': '                                                             This parameter can be a combination of', '557': '                                                             @ref ETH_MAC_Rx_Tx_Status */', '558': '', '559': '  __IO uint32_t              MACWakeUpEvent;            /*!< Holds the Wake Up event when the MAC exit the power down mode', '560': '                                                             This parameter can be a value of', '561': '                                                             @ref ETH_MAC_Wake_Up_Event */', '562': '', '563': '  __IO uint32_t              MACLPIEvent;               /*!< Holds the LPI event when the an LPI status interrupt occurs.', '564': '                                                             This parameter can be a value of @ref ETHEx_LPI_Event */', '565': '', '566': '  __IO uint32_t              IsPtpConfigured;           /*!< Holds the PTP configuration status.', '567': '                                                             This parameter can be a value of', '568': '                                                             @ref ETH_PTP_Config_Status */', '569': '', '570': '#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)', '571': '', '572': '  void (* TxCpltCallback)(struct __ETH_HandleTypeDef *heth);             /*!< ETH Tx Complete Callback */', '573': '  void (* RxCpltCallback)(struct __ETH_HandleTypeDef *heth);            /*!< ETH Rx  Complete Callback     */', '574': '  void (* ErrorCallback)(struct __ETH_HandleTypeDef *heth);             /*!< ETH Error Callback   */', '575': '  void (* PMTCallback)(struct __ETH_HandleTypeDef *heth);               /*!< ETH Power Management Callback            */', '576': '  void (* WakeUpCallback)(struct __ETH_HandleTypeDef *heth);            /*!< ETH Wake UP Callback   */', '577': '', '578': '  void (* MspInitCallback)(struct __ETH_HandleTypeDef *heth);             /*!< ETH Msp Init callback              */', '579': '  void (* MspDeInitCallback)(struct __ETH_HandleTypeDef *heth);           /*!< ETH Msp DeInit callback            */', '580': '', '581': '#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */', '582': '', '583': '  pETH_rxAllocateCallbackTypeDef  rxAllocateCallback;  /*!< ETH Rx Get Buffer Function   */', '584': '  pETH_rxLinkCallbackTypeDef      rxLinkCallback; /*!< ETH Rx Set App Data Function */', '585': '  pETH_txFreeCallbackTypeDef      txFreeCallback;       /*!< ETH Tx Free Function         */', '586': '  pETH_txPtpCallbackTypeDef       txPtpCallback;  /*!< ETH Tx Handle Ptp Function */', '587': '', '588': '} ETH_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'ETH_InitTypeDef', 'TxDescList': 'ETH_TxDescListTypeDef', 'RxDescList': 'ETH_RxDescListTypeDef', 'gState': '__clock_t', 'ErrorCode': '__clockid_t', 'DMAErrorCode': 'unsigned long', 'MACErrorCode': '__sigset_t', 'MACWakeUpEvent': 'UBaseType_t', 'MACLPIEvent': 'UBaseType_t', 'IsPtpConfigured': '__timer_t', 'rxAllocateCallback': '..(*)(..)', 'rxLinkCallback': '..(*)(..)', 'txFreeCallback': 'pETH_txFreeCallbackTypeDef', 'txPtpCallback': '..(*)(..)'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "b3c5524f-5d6a-49bd-a728-4000322317c2",
+      "tool_call_id": "call_00_SLbl2eyYHdkQ7yHxzacL4str",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `ETH_DMARxDescListInit`, here is my classification:\n\n## Classification: **INIT**\n\n### Reasoning:\n\n1. **Function Purpose**: The function is clearly an initialization function as indicated by:\n   - The comment: \"Initializes the DMA Rx descriptors in chain mode. called by HAL_ETH_Init() API.\"\n   - It's called from `HAL_ETH_Init`, which is the main Ethernet initialization function.\n\n2. **Function Behavior**: \n   - Initializes DMA receive descriptors by setting up descriptor fields (DESC0-DESC3, BackupAddr0, BackupAddr1)\n   - Configures descriptor ownership, buffer sizes, and interrupt settings\n   - Sets up descriptor chaining (linking descriptors together in a circular list)\n   - Initializes various counters and indices in the RxDescList structure\n   - Sets the DMA Receive Descriptor List Address Register (DMARDLAR)\n\n3. **MMIO Operations**: The function contains multiple `WRITE_REG` operations that write to peripheral registers, specifically:\n   - Writing to descriptor fields\n   - Writing to the RxDescList structure members\n   - Writing to the DMARDLAR register (line 3040)\n\n4. **No Data Transmission/Reception**: This function does not perform actual data transmission or reception operations - it only sets up the DMA descriptor structures for future data operations.\n\n5. **No Interrupt Handling**: While it mentions \"Enable Ethernet DMA Rx Descriptor interrupt\" in the comments, this is just configuring descriptor flags, not actually enabling hardware interrupts or handling them.\n\n6. **Initialization Context**: As part of the Ethernet HAL initialization sequence, this function is responsible for setting up the DMA receive descriptor ring buffer, which is a critical initialization step for Ethernet operation.\n\n**Conclusion**: This is an **INIT** category function because it performs peripheral initialization and configuration operations that set up the DMA receive descriptor structures for Ethernet operation. The strategy should be to remove the MMIO register access operations while preserving the initialization logic for the data structures to maintain correct state machine behavior after initialization.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 429,
+          "prompt_tokens": 9694,
+          "total_tokens": 10123,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 7360
+          },
+          "prompt_cache_hit_tokens": 7360,
+          "prompt_cache_miss_tokens": 2334
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--a3388057-dbe1-4d2d-b36e-609a492f0784-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9694,
+        "output_tokens": 429,
+        "total_tokens": 10123,
+        "input_token_details": {
+          "cache_read": 7360
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "ETH_DMARxDescListInit",
+    "function_type": "INIT",
+    "functionality": "Initializes the DMA Rx descriptors in chain mode by setting up descriptor fields, configuring ownership bits, buffer sizes, interrupt settings, and creating a circular descriptor list for Ethernet receive operations",
+    "classification_reason": "This function performs peripheral initialization operations for Ethernet DMA receive descriptors. It sets up descriptor structures, configures descriptor chaining, initializes counters and indices, and writes to peripheral registers. It is called from HAL_ETH_Init() as part of the Ethernet initialization sequence and does not perform actual data transmission/reception or interrupt handling.",
+    "has_replacement": true,
+    "function_replacement": "/**\n* @brief  Initializes the DMA Rx descriptors in chain mode.\n*         called by HAL_ETH_Init() API.\n* @param  heth: pointer to a ETH_HandleTypeDef structure that contains\n*         the configuration information for ETHERNET module\n* @retval None\n*/\nstatic void ETH_DMARxDescListInit(ETH_HandleTypeDef *heth)\n{\n  ETH_DMADescTypeDef *dmarxdesc;\n  uint32_t i;\n\n  for (i = 0; i < (uint32_t)ETH_RX_DESC_CNT; i++)\n  {\n    dmarxdesc =  heth->Init.RxDesc + i;\n\n    /* Initialize descriptor fields */\n    dmarxdesc->DESC0 = 0x0U;\n    dmarxdesc->DESC1 = 0x0U;\n    dmarxdesc->DESC2 = 0x0U;\n    dmarxdesc->DESC3 = 0x0U;\n    dmarxdesc->BackupAddr0 = 0x0U;\n    dmarxdesc->BackupAddr1 = 0x0U;\n\n    /* Set Own bit of the Rx descriptor Status */\n    dmarxdesc->DESC0 = ETH_DMARXDESC_OWN;\n\n    /* Set Buffer1 size and Second Address Chained bit */\n    dmarxdesc->DESC1 = heth->Init.RxBuffLen | ETH_DMARXDESC_RCH;\n\n    /* Enable Ethernet DMA Rx Descriptor interrupt */\n    dmarxdesc->DESC1 &= ~ETH_DMARXDESC_DIC;\n\n    /* Set Rx descriptors addresses */\n    heth->RxDescList.RxDesc[i] = (uint32_t)dmarxdesc;\n\n    if (i < ((uint32_t)ETH_RX_DESC_CNT - 1U))\n    {\n      dmarxdesc->DESC3 = (uint32_t)(heth->Init.RxDesc + i + 1U);\n    }\n    else\n    {\n      dmarxdesc->DESC3 = (uint32_t)(heth->Init.RxDesc);\n    }\n  }\n\n  /* Initialize descriptor list counters and indices */\n  heth->RxDescList.RxDescIdx = 0U;\n  heth->RxDescList.RxDescCnt = 0U;\n  heth->RxDescList.RxBuildDescIdx = 0U;\n  heth->RxDescList.RxBuildDescCnt = 0U;\n  heth->RxDescList.ItMode = 0U;\n\n  /* Set Receive Descriptor List Address - removed peripheral register access */\n  /* WRITE_REG(heth->Instance->DMARDLAR, (uint32_t) heth->Init.RxDesc); */\n}"
+  }
+}

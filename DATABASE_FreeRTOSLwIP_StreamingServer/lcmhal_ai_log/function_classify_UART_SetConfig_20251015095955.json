@@ -1,0 +1,348 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "87ab83b0-a9eb-4ee2-aafb-4f1b8ce18216"
+    },
+    {
+      "content": "Classify the function : UART_SetConfig",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "4a56f5d3-7dbe-4334-8a2b-7aab363d6986",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `UART_SetConfig` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_Aa9LFlGNi8fxcchVOmd4eezW",
+            "function": {
+              "arguments": "{\"func_name\": \"UART_SetConfig\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 48,
+          "prompt_tokens": 1669,
+          "total_tokens": 1717,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1600
+          },
+          "prompt_cache_hit_tokens": 1600,
+          "prompt_cache_miss_tokens": 69
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--18d39cb9-e8a9-4a7e-83e3-bc694c7f5a12-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "UART_SetConfig"
+          },
+          "id": "call_00_Aa9LFlGNi8fxcchVOmd4eezW",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1669,
+        "output_tokens": 48,
+        "total_tokens": 1717,
+        "input_token_details": {
+          "cache_read": 1600
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', location_line=2901, function_content=\"/**\\n* @brief Configure the UART peripheral.\\n* @param huart UART handle.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef UART_SetConfig(UART_HandleTypeDef *huart)\\n{\\n  uint32_t tmpreg;\\n  uint16_t brrtemp;\\n  UART_ClockSourceTypeDef clocksource;\\n  uint32_t usartdiv;\\n  HAL_StatusTypeDef ret               = HAL_OK;\\n  uint32_t pclk;\\n\\n  /* Check the parameters */\\n  assert_param(IS_UART_BAUDRATE(huart->Init.BaudRate));\\n  assert_param(IS_UART_WORD_LENGTH(huart->Init.WordLength));\\n  assert_param(IS_UART_STOPBITS(huart->Init.StopBits));\\n  assert_param(IS_UART_ONE_BIT_SAMPLE(huart->Init.OneBitSampling));\\n\\n  assert_param(IS_UART_PARITY(huart->Init.Parity));\\n  assert_param(IS_UART_MODE(huart->Init.Mode));\\n  assert_param(IS_UART_HARDWARE_FLOW_CONTROL(huart->Init.HwFlowCtl));\\n  assert_param(IS_UART_OVERSAMPLING(huart->Init.OverSampling));\\n\\n  /*-------------------------- USART CR1 Configuration -----------------------*/\\n  /* Clear M, PCE, PS, TE, RE and OVER8 bits and configure\\n  *  the UART Word Length, Parity, Mode and oversampling:\\n  *  set the M bits according to huart->Init.WordLength value\\n  *  set PCE and PS bits according to huart->Init.Parity value\\n  *  set TE and RE bits according to huart->Init.Mode value\\n  *  set OVER8 bit according to huart->Init.OverSampling value */\\n  tmpreg = (uint32_t)huart->Init.WordLength | huart->Init.Parity | huart->Init.Mode | huart->Init.OverSampling ;\\n  MODIFY_REG(huart->Instance->CR1, USART_CR1_FIELDS, tmpreg);\\n\\n  /*-------------------------- USART CR2 Configuration -----------------------*/\\n  /* Configure the UART Stop Bits: Set STOP[13:12] bits according\\n  * to huart->Init.StopBits value */\\n  MODIFY_REG(huart->Instance->CR2, USART_CR2_STOP, huart->Init.StopBits);\\n\\n  /*-------------------------- USART CR3 Configuration -----------------------*/\\n  /* Configure\\n  * - UART HardWare Flow Control: set CTSE and RTSE bits according\\n  *   to huart->Init.HwFlowCtl value\\n  * - one-bit sampling method versus three samples' majority rule according\\n  *   to huart->Init.OneBitSampling (not applicable to LPUART) */\\n  tmpreg = (uint32_t)huart->Init.HwFlowCtl;\\n\\n  tmpreg |= huart->Init.OneBitSampling;\\n  MODIFY_REG(huart->Instance->CR3, USART_CR3_FIELDS, tmpreg);\\n\\n\\n  /*-------------------------- USART BRR Configuration -----------------------*/\\n  UART_GETCLOCKSOURCE(huart, clocksource);\\n\\n  if (huart->Init.OverSampling == UART_OVERSAMPLING_8)\\n  {\\n    switch (clocksource)\\n    {\\n      case UART_CLOCKSOURCE_PCLK1:\\n        pclk = HAL_RCC_GetPCLK1Freq();\\n        break;\\n      case UART_CLOCKSOURCE_PCLK2:\\n        pclk = HAL_RCC_GetPCLK2Freq();\\n        break;\\n      case UART_CLOCKSOURCE_HSI:\\n        pclk = (uint32_t) HSI_VALUE;\\n        break;\\n      case UART_CLOCKSOURCE_SYSCLK:\\n        pclk = HAL_RCC_GetSysClockFreq();\\n        break;\\n      case UART_CLOCKSOURCE_LSE:\\n        pclk = (uint32_t) LSE_VALUE;\\n        break;\\n      default:\\n        pclk = 0U;\\n        ret = HAL_ERROR;\\n        break;\\n    }\\n\\n    /* USARTDIV must be greater than or equal to 0d16 */\\n    if (pclk != 0U)\\n    {\\n      usartdiv = (uint32_t)(UART_DIV_SAMPLING8(pclk, huart->Init.BaudRate));\\n      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))\\n      {\\n        brrtemp = (uint16_t)(usartdiv & 0xFFF0U);\\n        brrtemp |= (uint16_t)((usartdiv & (uint16_t)0x000FU) >> 1U);\\n        huart->Instance->BRR = brrtemp;\\n      }\\n      else\\n      {\\n        ret = HAL_ERROR;\\n      }\\n    }\\n  }\\n  else\\n  {\\n    switch (clocksource)\\n    {\\n      case UART_CLOCKSOURCE_PCLK1:\\n        pclk = HAL_RCC_GetPCLK1Freq();\\n        break;\\n      case UART_CLOCKSOURCE_PCLK2:\\n        pclk = HAL_RCC_GetPCLK2Freq();\\n        break;\\n      case UART_CLOCKSOURCE_HSI:\\n        pclk = (uint32_t) HSI_VALUE;\\n        break;\\n      case UART_CLOCKSOURCE_SYSCLK:\\n        pclk = HAL_RCC_GetSysClockFreq();\\n        break;\\n      case UART_CLOCKSOURCE_LSE:\\n        pclk = (uint32_t) LSE_VALUE;\\n        break;\\n      default:\\n        pclk = 0U;\\n        ret = HAL_ERROR;\\n        break;\\n    }\\n\\n    if (pclk != 0U)\\n    {\\n      /* USARTDIV must be greater than or equal to 0d16 */\\n      usartdiv = (uint32_t)(UART_DIV_SAMPLING16(pclk, huart->Init.BaudRate));\\n      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))\\n      {\\n        huart->Instance->BRR = (uint16_t)usartdiv;\\n      }\\n      else\\n      {\\n        ret = HAL_ERROR;\\n      }\\n    }\\n  }\\n\\n\\n  /* Clear ISR function pointers */\\n  huart->RxISR = NULL;\\n  huart->TxISR = NULL;\\n\\n  return ret;\\n}\\n\", function_content_in_lines={'2901': 'HAL_StatusTypeDef UART_SetConfig(UART_HandleTypeDef *huart)', '2902': '{', '2903': '  uint32_t tmpreg;', '2904': '  uint16_t brrtemp;', '2905': '  UART_ClockSourceTypeDef clocksource;', '2906': '  uint32_t usartdiv;', '2907': '  HAL_StatusTypeDef ret               = HAL_OK;', '2908': '  uint32_t pclk;', '2909': '', '2910': '  /* Check the parameters */', '2911': '  assert_param(IS_UART_BAUDRATE(huart->Init.BaudRate));', '2912': '  assert_param(IS_UART_WORD_LENGTH(huart->Init.WordLength));', '2913': '  assert_param(IS_UART_STOPBITS(huart->Init.StopBits));', '2914': '  assert_param(IS_UART_ONE_BIT_SAMPLE(huart->Init.OneBitSampling));', '2915': '', '2916': '  assert_param(IS_UART_PARITY(huart->Init.Parity));', '2917': '  assert_param(IS_UART_MODE(huart->Init.Mode));', '2918': '  assert_param(IS_UART_HARDWARE_FLOW_CONTROL(huart->Init.HwFlowCtl));', '2919': '  assert_param(IS_UART_OVERSAMPLING(huart->Init.OverSampling));', '2920': '', '2921': '  /*-------------------------- USART CR1 Configuration -----------------------*/', '2922': '  /* Clear M, PCE, PS, TE, RE and OVER8 bits and configure', '2923': '  *  the UART Word Length, Parity, Mode and oversampling:', '2924': '  *  set the M bits according to huart->Init.WordLength value', '2925': '  *  set PCE and PS bits according to huart->Init.Parity value', '2926': '  *  set TE and RE bits according to huart->Init.Mode value', '2927': '  *  set OVER8 bit according to huart->Init.OverSampling value */', '2928': '  tmpreg = (uint32_t)huart->Init.WordLength | huart->Init.Parity | huart->Init.Mode | huart->Init.OverSampling ;', '2929': '  MODIFY_REG(huart->Instance->CR1, USART_CR1_FIELDS, tmpreg);', '2930': '', '2931': '  /*-------------------------- USART CR2 Configuration -----------------------*/', '2932': '  /* Configure the UART Stop Bits: Set STOP[13:12] bits according', '2933': '  * to huart->Init.StopBits value */', '2934': '  MODIFY_REG(huart->Instance->CR2, USART_CR2_STOP, huart->Init.StopBits);', '2935': '', '2936': '  /*-------------------------- USART CR3 Configuration -----------------------*/', '2937': '  /* Configure', '2938': '  * - UART HardWare Flow Control: set CTSE and RTSE bits according', '2939': '  *   to huart->Init.HwFlowCtl value', '2940': \"  * - one-bit sampling method versus three samples' majority rule according\", '2941': '  *   to huart->Init.OneBitSampling (not applicable to LPUART) */', '2942': '  tmpreg = (uint32_t)huart->Init.HwFlowCtl;', '2943': '', '2944': '  tmpreg |= huart->Init.OneBitSampling;', '2945': '  MODIFY_REG(huart->Instance->CR3, USART_CR3_FIELDS, tmpreg);', '2946': '', '2947': '', '2948': '  /*-------------------------- USART BRR Configuration -----------------------*/', '2949': '  UART_GETCLOCKSOURCE(huart, clocksource);', '2950': '', '2951': '  if (huart->Init.OverSampling == UART_OVERSAMPLING_8)', '2952': '  {', '2953': '    switch (clocksource)', '2954': '    {', '2955': '      case UART_CLOCKSOURCE_PCLK1:', '2956': '        pclk = HAL_RCC_GetPCLK1Freq();', '2957': '        break;', '2958': '      case UART_CLOCKSOURCE_PCLK2:', '2959': '        pclk = HAL_RCC_GetPCLK2Freq();', '2960': '        break;', '2961': '      case UART_CLOCKSOURCE_HSI:', '2962': '        pclk = (uint32_t) HSI_VALUE;', '2963': '        break;', '2964': '      case UART_CLOCKSOURCE_SYSCLK:', '2965': '        pclk = HAL_RCC_GetSysClockFreq();', '2966': '        break;', '2967': '      case UART_CLOCKSOURCE_LSE:', '2968': '        pclk = (uint32_t) LSE_VALUE;', '2969': '        break;', '2970': '      default:', '2971': '        pclk = 0U;', '2972': '        ret = HAL_ERROR;', '2973': '        break;', '2974': '    }', '2975': '', '2976': '    /* USARTDIV must be greater than or equal to 0d16 */', '2977': '    if (pclk != 0U)', '2978': '    {', '2979': '      usartdiv = (uint32_t)(UART_DIV_SAMPLING8(pclk, huart->Init.BaudRate));', '2980': '      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))', '2981': '      {', '2982': '        brrtemp = (uint16_t)(usartdiv & 0xFFF0U);', '2983': '        brrtemp |= (uint16_t)((usartdiv & (uint16_t)0x000FU) >> 1U);', '2984': '        huart->Instance->BRR = brrtemp;', '2985': '      }', '2986': '      else', '2987': '      {', '2988': '        ret = HAL_ERROR;', '2989': '      }', '2990': '    }', '2991': '  }', '2992': '  else', '2993': '  {', '2994': '    switch (clocksource)', '2995': '    {', '2996': '      case UART_CLOCKSOURCE_PCLK1:', '2997': '        pclk = HAL_RCC_GetPCLK1Freq();', '2998': '        break;', '2999': '      case UART_CLOCKSOURCE_PCLK2:', '3000': '        pclk = HAL_RCC_GetPCLK2Freq();', '3001': '        break;', '3002': '      case UART_CLOCKSOURCE_HSI:', '3003': '        pclk = (uint32_t) HSI_VALUE;', '3004': '        break;', '3005': '      case UART_CLOCKSOURCE_SYSCLK:', '3006': '        pclk = HAL_RCC_GetSysClockFreq();', '3007': '        break;', '3008': '      case UART_CLOCKSOURCE_LSE:', '3009': '        pclk = (uint32_t) LSE_VALUE;', '3010': '        break;', '3011': '      default:', '3012': '        pclk = 0U;', '3013': '        ret = HAL_ERROR;', '3014': '        break;', '3015': '    }', '3016': '', '3017': '    if (pclk != 0U)', '3018': '    {', '3019': '      /* USARTDIV must be greater than or equal to 0d16 */', '3020': '      usartdiv = (uint32_t)(UART_DIV_SAMPLING16(pclk, huart->Init.BaudRate));', '3021': '      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))', '3022': '      {', '3023': '        huart->Instance->BRR = (uint16_t)usartdiv;', '3024': '      }', '3025': '      else', '3026': '      {', '3027': '        ret = HAL_ERROR;', '3028': '      }', '3029': '    }', '3030': '  }', '3031': '', '3032': '', '3033': '  /* Clear ISR function pointers */', '3034': '  huart->RxISR = NULL;', '3035': '  huart->TxISR = NULL;', '3036': '', '3037': '  return ret;', '3038': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "2e2c6b75-881a-4b9b-8423-4ee623b42c61",
+      "tool_call_id": "call_00_Aa9LFlGNi8fxcchVOmd4eezW",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral register operations it performs:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_Ps81ycJC7aBNOPnkjjbmUnaX",
+            "function": {
+              "arguments": "{\"func_name\": \"UART_SetConfig\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 41,
+          "prompt_tokens": 5566,
+          "total_tokens": 5607,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 3902
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--28b48c23-dddc-478e-861f-8ad8104084f9-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "UART_SetConfig"
+          },
+          "id": "call_00_Ps81ycJC7aBNOPnkjjbmUnaX",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5566,
+        "output_tokens": 41,
+        "total_tokens": 5607,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', location_line=2901, function_content=\"/**\\n* @brief Configure the UART peripheral.\\n* @param huart UART handle.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef UART_SetConfig(UART_HandleTypeDef *huart)\\n{\\n  uint32_t tmpreg;\\n  uint16_t brrtemp;\\n  UART_ClockSourceTypeDef clocksource;\\n  uint32_t usartdiv;\\n  HAL_StatusTypeDef ret               = HAL_OK;\\n  uint32_t pclk;\\n\\n  /* Check the parameters */\\n  assert_param(IS_UART_BAUDRATE(huart->Init.BaudRate));\\n  assert_param(IS_UART_WORD_LENGTH(huart->Init.WordLength));\\n  assert_param(IS_UART_STOPBITS(huart->Init.StopBits));\\n  assert_param(IS_UART_ONE_BIT_SAMPLE(huart->Init.OneBitSampling));\\n\\n  assert_param(IS_UART_PARITY(huart->Init.Parity));\\n  assert_param(IS_UART_MODE(huart->Init.Mode));\\n  assert_param(IS_UART_HARDWARE_FLOW_CONTROL(huart->Init.HwFlowCtl));\\n  assert_param(IS_UART_OVERSAMPLING(huart->Init.OverSampling));\\n\\n  /*-------------------------- USART CR1 Configuration -----------------------*/\\n  /* Clear M, PCE, PS, TE, RE and OVER8 bits and configure\\n  *  the UART Word Length, Parity, Mode and oversampling:\\n  *  set the M bits according to huart->Init.WordLength value\\n  *  set PCE and PS bits according to huart->Init.Parity value\\n  *  set TE and RE bits according to huart->Init.Mode value\\n  *  set OVER8 bit according to huart->Init.OverSampling value */\\n  tmpreg = (uint32_t)huart->Init.WordLength | huart->Init.Parity | huart->Init.Mode | huart->Init.OverSampling ;\\n  MODIFY_REG(huart->Instance->CR1, USART_CR1_FIELDS, tmpreg);\\n\\n  /*-------------------------- USART CR2 Configuration -----------------------*/\\n  /* Configure the UART Stop Bits: Set STOP[13:12] bits according\\n  * to huart->Init.StopBits value */\\n  MODIFY_REG(huart->Instance->CR2, USART_CR2_STOP, huart->Init.StopBits);\\n\\n  /*-------------------------- USART CR3 Configuration -----------------------*/\\n  /* Configure\\n  * - UART HardWare Flow Control: set CTSE and RTSE bits according\\n  *   to huart->Init.HwFlowCtl value\\n  * - one-bit sampling method versus three samples' majority rule according\\n  *   to huart->Init.OneBitSampling (not applicable to LPUART) */\\n  tmpreg = (uint32_t)huart->Init.HwFlowCtl;\\n\\n  tmpreg |= huart->Init.OneBitSampling;\\n  MODIFY_REG(huart->Instance->CR3, USART_CR3_FIELDS, tmpreg);\\n\\n\\n  /*-------------------------- USART BRR Configuration -----------------------*/\\n  UART_GETCLOCKSOURCE(huart, clocksource);\\n\\n  if (huart->Init.OverSampling == UART_OVERSAMPLING_8)\\n  {\\n    switch (clocksource)\\n    {\\n      case UART_CLOCKSOURCE_PCLK1:\\n        pclk = HAL_RCC_GetPCLK1Freq();\\n        break;\\n      case UART_CLOCKSOURCE_PCLK2:\\n        pclk = HAL_RCC_GetPCLK2Freq();\\n        break;\\n      case UART_CLOCKSOURCE_HSI:\\n        pclk = (uint32_t) HSI_VALUE;\\n        break;\\n      case UART_CLOCKSOURCE_SYSCLK:\\n        pclk = HAL_RCC_GetSysClockFreq();\\n        break;\\n      case UART_CLOCKSOURCE_LSE:\\n        pclk = (uint32_t) LSE_VALUE;\\n        break;\\n      default:\\n        pclk = 0U;\\n        ret = HAL_ERROR;\\n        break;\\n    }\\n\\n    /* USARTDIV must be greater than or equal to 0d16 */\\n    if (pclk != 0U)\\n    {\\n      usartdiv = (uint32_t)(UART_DIV_SAMPLING8(pclk, huart->Init.BaudRate));\\n      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))\\n      {\\n        brrtemp = (uint16_t)(usartdiv & 0xFFF0U);\\n        brrtemp |= (uint16_t)((usartdiv & (uint16_t)0x000FU) >> 1U);\\n        huart->Instance->BRR = brrtemp;\\n      }\\n      else\\n      {\\n        ret = HAL_ERROR;\\n      }\\n    }\\n  }\\n  else\\n  {\\n    switch (clocksource)\\n    {\\n      case UART_CLOCKSOURCE_PCLK1:\\n        pclk = HAL_RCC_GetPCLK1Freq();\\n        break;\\n      case UART_CLOCKSOURCE_PCLK2:\\n        pclk = HAL_RCC_GetPCLK2Freq();\\n        break;\\n      case UART_CLOCKSOURCE_HSI:\\n        pclk = (uint32_t) HSI_VALUE;\\n        break;\\n      case UART_CLOCKSOURCE_SYSCLK:\\n        pclk = HAL_RCC_GetSysClockFreq();\\n        break;\\n      case UART_CLOCKSOURCE_LSE:\\n        pclk = (uint32_t) LSE_VALUE;\\n        break;\\n      default:\\n        pclk = 0U;\\n        ret = HAL_ERROR;\\n        break;\\n    }\\n\\n    if (pclk != 0U)\\n    {\\n      /* USARTDIV must be greater than or equal to 0d16 */\\n      usartdiv = (uint32_t)(UART_DIV_SAMPLING16(pclk, huart->Init.BaudRate));\\n      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))\\n      {\\n        huart->Instance->BRR = (uint16_t)usartdiv;\\n      }\\n      else\\n      {\\n        ret = HAL_ERROR;\\n      }\\n    }\\n  }\\n\\n\\n  /* Clear ISR function pointers */\\n  huart->RxISR = NULL;\\n  huart->TxISR = NULL;\\n\\n  return ret;\\n}\\n\", function_content_in_lines={'2901': 'HAL_StatusTypeDef UART_SetConfig(UART_HandleTypeDef *huart)', '2902': '{', '2903': '  uint32_t tmpreg;', '2904': '  uint16_t brrtemp;', '2905': '  UART_ClockSourceTypeDef clocksource;', '2906': '  uint32_t usartdiv;', '2907': '  HAL_StatusTypeDef ret               = HAL_OK;', '2908': '  uint32_t pclk;', '2909': '', '2910': '  /* Check the parameters */', '2911': '  assert_param(IS_UART_BAUDRATE(huart->Init.BaudRate));', '2912': '  assert_param(IS_UART_WORD_LENGTH(huart->Init.WordLength));', '2913': '  assert_param(IS_UART_STOPBITS(huart->Init.StopBits));', '2914': '  assert_param(IS_UART_ONE_BIT_SAMPLE(huart->Init.OneBitSampling));', '2915': '', '2916': '  assert_param(IS_UART_PARITY(huart->Init.Parity));', '2917': '  assert_param(IS_UART_MODE(huart->Init.Mode));', '2918': '  assert_param(IS_UART_HARDWARE_FLOW_CONTROL(huart->Init.HwFlowCtl));', '2919': '  assert_param(IS_UART_OVERSAMPLING(huart->Init.OverSampling));', '2920': '', '2921': '  /*-------------------------- USART CR1 Configuration -----------------------*/', '2922': '  /* Clear M, PCE, PS, TE, RE and OVER8 bits and configure', '2923': '  *  the UART Word Length, Parity, Mode and oversampling:', '2924': '  *  set the M bits according to huart->Init.WordLength value', '2925': '  *  set PCE and PS bits according to huart->Init.Parity value', '2926': '  *  set TE and RE bits according to huart->Init.Mode value', '2927': '  *  set OVER8 bit according to huart->Init.OverSampling value */', '2928': '  tmpreg = (uint32_t)huart->Init.WordLength | huart->Init.Parity | huart->Init.Mode | huart->Init.OverSampling ;', '2929': '  MODIFY_REG(huart->Instance->CR1, USART_CR1_FIELDS, tmpreg);', '2930': '', '2931': '  /*-------------------------- USART CR2 Configuration -----------------------*/', '2932': '  /* Configure the UART Stop Bits: Set STOP[13:12] bits according', '2933': '  * to huart->Init.StopBits value */', '2934': '  MODIFY_REG(huart->Instance->CR2, USART_CR2_STOP, huart->Init.StopBits);', '2935': '', '2936': '  /*-------------------------- USART CR3 Configuration -----------------------*/', '2937': '  /* Configure', '2938': '  * - UART HardWare Flow Control: set CTSE and RTSE bits according', '2939': '  *   to huart->Init.HwFlowCtl value', '2940': \"  * - one-bit sampling method versus three samples' majority rule according\", '2941': '  *   to huart->Init.OneBitSampling (not applicable to LPUART) */', '2942': '  tmpreg = (uint32_t)huart->Init.HwFlowCtl;', '2943': '', '2944': '  tmpreg |= huart->Init.OneBitSampling;', '2945': '  MODIFY_REG(huart->Instance->CR3, USART_CR3_FIELDS, tmpreg);', '2946': '', '2947': '', '2948': '  /*-------------------------- USART BRR Configuration -----------------------*/', '2949': '  UART_GETCLOCKSOURCE(huart, clocksource);', '2950': '', '2951': '  if (huart->Init.OverSampling == UART_OVERSAMPLING_8)', '2952': '  {', '2953': '    switch (clocksource)', '2954': '    {', '2955': '      case UART_CLOCKSOURCE_PCLK1:', '2956': '        pclk = HAL_RCC_GetPCLK1Freq();', '2957': '        break;', '2958': '      case UART_CLOCKSOURCE_PCLK2:', '2959': '        pclk = HAL_RCC_GetPCLK2Freq();', '2960': '        break;', '2961': '      case UART_CLOCKSOURCE_HSI:', '2962': '        pclk = (uint32_t) HSI_VALUE;', '2963': '        break;', '2964': '      case UART_CLOCKSOURCE_SYSCLK:', '2965': '        pclk = HAL_RCC_GetSysClockFreq();', '2966': '        break;', '2967': '      case UART_CLOCKSOURCE_LSE:', '2968': '        pclk = (uint32_t) LSE_VALUE;', '2969': '        break;', '2970': '      default:', '2971': '        pclk = 0U;', '2972': '        ret = HAL_ERROR;', '2973': '        break;', '2974': '    }', '2975': '', '2976': '    /* USARTDIV must be greater than or equal to 0d16 */', '2977': '    if (pclk != 0U)', '2978': '    {', '2979': '      usartdiv = (uint32_t)(UART_DIV_SAMPLING8(pclk, huart->Init.BaudRate));', '2980': '      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))', '2981': '      {', '2982': '        brrtemp = (uint16_t)(usartdiv & 0xFFF0U);', '2983': '        brrtemp |= (uint16_t)((usartdiv & (uint16_t)0x000FU) >> 1U);', '2984': '        huart->Instance->BRR = brrtemp;', '2985': '      }', '2986': '      else', '2987': '      {', '2988': '        ret = HAL_ERROR;', '2989': '      }', '2990': '    }', '2991': '  }', '2992': '  else', '2993': '  {', '2994': '    switch (clocksource)', '2995': '    {', '2996': '      case UART_CLOCKSOURCE_PCLK1:', '2997': '        pclk = HAL_RCC_GetPCLK1Freq();', '2998': '        break;', '2999': '      case UART_CLOCKSOURCE_PCLK2:', '3000': '        pclk = HAL_RCC_GetPCLK2Freq();', '3001': '        break;', '3002': '      case UART_CLOCKSOURCE_HSI:', '3003': '        pclk = (uint32_t) HSI_VALUE;', '3004': '        break;', '3005': '      case UART_CLOCKSOURCE_SYSCLK:', '3006': '        pclk = HAL_RCC_GetSysClockFreq();', '3007': '        break;', '3008': '      case UART_CLOCKSOURCE_LSE:', '3009': '        pclk = (uint32_t) LSE_VALUE;', '3010': '        break;', '3011': '      default:', '3012': '        pclk = 0U;', '3013': '        ret = HAL_ERROR;', '3014': '        break;', '3015': '    }', '3016': '', '3017': '    if (pclk != 0U)', '3018': '    {', '3019': '      /* USARTDIV must be greater than or equal to 0d16 */', '3020': '      usartdiv = (uint32_t)(UART_DIV_SAMPLING16(pclk, huart->Init.BaudRate));', '3021': '      if ((usartdiv >= UART_BRR_MIN) && (usartdiv <= UART_BRR_MAX))', '3022': '      {', '3023': '        huart->Instance->BRR = (uint16_t)usartdiv;', '3024': '      }', '3025': '      else', '3026': '      {', '3027': '        ret = HAL_ERROR;', '3028': '      }', '3029': '    }', '3030': '  }', '3031': '', '3032': '', '3033': '  /* Clear ISR function pointers */', '3034': '  huart->RxISR = NULL;', '3035': '  huart->TxISR = NULL;', '3036': '', '3037': '  return ret;', '3038': '}'})\nMMIO Exprs info: [MmioExprInfo(name='BRR', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2984, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='BRR', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3023, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='BaudRate', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='BaudRate', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3020, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='brrtemp', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2982, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='brrtemp', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2983, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='brrtemp', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2984, expr_type='varaccess', enclosing_type='assign_to'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2980, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2982, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2983, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3020, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3021, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='usartdiv', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3023, expr_type='varaccess', enclosing_type='assign_to'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2956, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2959, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2965, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2977, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2997, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3000, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3006, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3017, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pclk', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3020, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='... |= ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2983, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... & ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2949, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... & ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2982, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2983, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... != ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2977, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3017, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... + ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... + ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3020, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... >> ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2983, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... / ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... / ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... / ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3020, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... / ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3020, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... * ...', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2979, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='call to HAL_RCC_GetSysClockFreq', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2965, expr_type='call', enclosing_type='assign_to'), MmioExprInfo(name='call to HAL_RCC_GetSysClockFreq', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3006, expr_type='call', enclosing_type='assign_to'), MmioExprInfo(name='call to HAL_RCC_GetPCLK2Freq', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2959, expr_type='call', enclosing_type='assign_to'), MmioExprInfo(name='call to HAL_RCC_GetPCLK2Freq', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3000, expr_type='call', enclosing_type='assign_to'), MmioExprInfo(name='call to HAL_RCC_GetPCLK1Freq', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2956, expr_type='call', enclosing_type='assign_to'), MmioExprInfo(name='call to HAL_RCC_GetPCLK1Freq', function='UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2997, expr_type='call', enclosing_type='assign_to')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "fdb07812-977a-43cf-bc00-ac720107a316",
+      "tool_call_id": "call_00_Ps81ycJC7aBNOPnkjjbmUnaX",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_II1MqNZ831cCVmWnGeu7xw3M",
+            "function": {
+              "arguments": "{\"func_name\": \"UART_SetConfig\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 34,
+          "prompt_tokens": 13091,
+          "total_tokens": 13125,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 5568
+          },
+          "prompt_cache_hit_tokens": 5568,
+          "prompt_cache_miss_tokens": 7523
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--a4333bec-ac40-42c8-86e3-1ab4e7e5792c-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "UART_SetConfig"
+          },
+          "id": "call_00_II1MqNZ831cCVmWnGeu7xw3M",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 13091,
+        "output_tokens": 34,
+        "total_tokens": 13125,
+        "input_token_details": {
+          "cache_read": 5568
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK2Freq', call_tag='call to HAL_RCC_GetPCLK2Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2959, call_type='direct', ret_type='noReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK2Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK2Freq', call_tag='call to HAL_RCC_GetPCLK2Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2959, call_type='direct', ret_type='hasReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK2Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK2Freq', call_tag='call to HAL_RCC_GetPCLK2Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3000, call_type='direct', ret_type='noReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK2Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK2Freq', call_tag='call to HAL_RCC_GetPCLK2Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3000, call_type='direct', ret_type='hasReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK2Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK1Freq', call_tag='call to HAL_RCC_GetPCLK1Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2956, call_type='direct', ret_type='noReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK1Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK1Freq', call_tag='call to HAL_RCC_GetPCLK1Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2956, call_type='direct', ret_type='hasReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK1Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK1Freq', call_tag='call to HAL_RCC_GetPCLK1Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2997, call_type='direct', ret_type='noReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK1Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetPCLK1Freq', call_tag='call to HAL_RCC_GetPCLK1Freq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2997, call_type='direct', ret_type='hasReturnValue', start_line_content='        pclk = HAL_RCC_GetPCLK1Freq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetSysClockFreq', call_tag='call to HAL_RCC_GetSysClockFreq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2965, call_type='direct', ret_type='noReturnValue', start_line_content='        pclk = HAL_RCC_GetSysClockFreq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetSysClockFreq', call_tag='call to HAL_RCC_GetSysClockFreq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2965, call_type='direct', ret_type='hasReturnValue', start_line_content='        pclk = HAL_RCC_GetSysClockFreq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetSysClockFreq', call_tag='call to HAL_RCC_GetSysClockFreq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3006, call_type='direct', ret_type='noReturnValue', start_line_content='        pclk = HAL_RCC_GetSysClockFreq();'), FunctionCallInfo(caller_name='UART_SetConfig', callee_name='HAL_RCC_GetSysClockFreq', call_tag='call to HAL_RCC_GetSysClockFreq', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3006, call_type='direct', ret_type='hasReturnValue', start_line_content='        pclk = HAL_RCC_GetSysClockFreq();')]\nFunction call from info: [FunctionCallInfo(caller_name='HAL_MultiProcessor_Init', callee_name='UART_SetConfig', call_tag='call to UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=582, call_type='direct', ret_type='noReturnValue', start_line_content='  if (UART_SetConfig(huart) == HAL_ERROR)'), FunctionCallInfo(caller_name='HAL_LIN_Init', callee_name='UART_SetConfig', call_tag='call to UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=496, call_type='direct', ret_type='noReturnValue', start_line_content='  if (UART_SetConfig(huart) == HAL_ERROR)'), FunctionCallInfo(caller_name='HAL_HalfDuplex_Init', callee_name='UART_SetConfig', call_tag='call to UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=408, call_type='direct', ret_type='noReturnValue', start_line_content='  if (UART_SetConfig(huart) == HAL_ERROR)'), FunctionCallInfo(caller_name='HAL_UART_Init', callee_name='UART_SetConfig', call_tag='call to UART_SetConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=341, call_type='direct', ret_type='noReturnValue', start_line_content='  if (UART_SetConfig(huart) == HAL_ERROR)')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "78b7cf0f-e238-4cfe-aa18-46abc630e594",
+      "tool_call_id": "call_00_II1MqNZ831cCVmWnGeu7xw3M",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the UART_HandleTypeDef structure to understand the data structure better:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_08v9WuH5vO9RpXERp9isPFe5",
+            "function": {
+              "arguments": "{\"struct_name\": \"UART_HandleTypeDef\"}",
+              "name": "collect_struct_or_enum_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 42,
+          "prompt_tokens": 15185,
+          "total_tokens": 15227,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 13120
+          },
+          "prompt_cache_hit_tokens": 13120,
+          "prompt_cache_miss_tokens": 2065
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--43404675-a8cb-43ea-9d45-35f40f6b1404-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "UART_HandleTypeDef"
+          },
+          "id": "call_00_08v9WuH5vO9RpXERp9isPFe5",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 15185,
+        "output_tokens": 42,
+        "total_tokens": 15227,
+        "input_token_details": {
+          "cache_read": 13120
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='UART_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_uart.h', location_line=211, struct_content='/**\\n* @brief  UART handle Structure definition\\n*/\\ntypedef struct __UART_HandleTypeDef\\n{\\n  USART_TypeDef            *Instance;                /*!< UART registers base address        */\\n\\n  UART_InitTypeDef         Init;                     /*!< UART communication parameters      */\\n\\n  UART_AdvFeatureInitTypeDef AdvancedInit;           /*!< UART Advanced Features initialization parameters */\\n\\n  const uint8_t            *pTxBuffPtr;              /*!< Pointer to UART Tx transfer Buffer */\\n\\n  uint16_t                 TxXferSize;               /*!< UART Tx Transfer size              */\\n\\n  __IO uint16_t            TxXferCount;              /*!< UART Tx Transfer Counter           */\\n\\n  uint8_t                  *pRxBuffPtr;              /*!< Pointer to UART Rx transfer Buffer */\\n\\n  uint16_t                 RxXferSize;               /*!< UART Rx Transfer size              */\\n\\n  __IO uint16_t            RxXferCount;              /*!< UART Rx Transfer Counter           */\\n\\n  uint16_t                 Mask;                     /*!< UART Rx RDR register mask          */\\n\\n  __IO HAL_UART_RxTypeTypeDef ReceptionType;         /*!< Type of ongoing reception          */\\n\\n  __IO HAL_UART_RxEventTypeTypeDef RxEventType;      /*!< Type of Rx Event                   */\\n\\n  void (*RxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Rx IRQ handler */\\n\\n  void (*TxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Tx IRQ handler */\\n\\n  DMA_HandleTypeDef        *hdmatx;                  /*!< UART Tx DMA Handle parameters      */\\n\\n  DMA_HandleTypeDef        *hdmarx;                  /*!< UART Rx DMA Handle parameters      */\\n\\n  HAL_LockTypeDef           Lock;                    /*!< Locking object                     */\\n\\n  __IO HAL_UART_StateTypeDef    gState;              /*!< UART state information related to global Handle management\\n                                                          and also related to Tx operations. This parameter\\n                                                          can be a value of @ref HAL_UART_StateTypeDef */\\n\\n  __IO HAL_UART_StateTypeDef    RxState;             /*!< UART state information related to Rx operations. This\\n                                                          parameter can be a value of @ref HAL_UART_StateTypeDef */\\n\\n  __IO uint32_t                 ErrorCode;           /*!< UART Error code                    */\\n\\n#if (USE_HAL_UART_REGISTER_CALLBACKS == 1)\\n  void (* TxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Tx Half Complete Callback        */\\n  void (* TxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Tx Complete Callback             */\\n  void (* RxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Rx Half Complete Callback        */\\n  void (* RxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Rx Complete Callback             */\\n  void (* ErrorCallback)(struct __UART_HandleTypeDef *huart);             /*!< UART Error Callback                   */\\n  void (* AbortCpltCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Abort Complete Callback          */\\n  void (* AbortTransmitCpltCallback)(struct __UART_HandleTypeDef *huart); /*!< UART Abort Transmit Complete Callback */\\n  void (* AbortReceiveCpltCallback)(struct __UART_HandleTypeDef *huart);  /*!< UART Abort Receive Complete Callback  */\\n#if defined(USART_CR1_UESM)\\n#if defined(USART_CR3_WUFIE)\\n  void (* WakeupCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Wakeup Callback                  */\\n#endif /* USART_CR3_WUFIE */\\n#endif /* USART_CR1_UESM */\\n  void (* RxEventCallback)(struct __UART_HandleTypeDef *huart, uint16_t Pos); /*!< UART Reception Event Callback     */\\n\\n  void (* MspInitCallback)(struct __UART_HandleTypeDef *huart);           /*!< UART Msp Init callback                */\\n  void (* MspDeInitCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Msp DeInit callback              */\\n#endif  /* USE_HAL_UART_REGISTER_CALLBACKS */\\n\\n} UART_HandleTypeDef;\\n', struct_content_in_lines={'211': 'typedef struct __UART_HandleTypeDef', '212': '{', '213': '  USART_TypeDef            *Instance;                /*!< UART registers base address        */', '214': '', '215': '  UART_InitTypeDef         Init;                     /*!< UART communication parameters      */', '216': '', '217': '  UART_AdvFeatureInitTypeDef AdvancedInit;           /*!< UART Advanced Features initialization parameters */', '218': '', '219': '  const uint8_t            *pTxBuffPtr;              /*!< Pointer to UART Tx transfer Buffer */', '220': '', '221': '  uint16_t                 TxXferSize;               /*!< UART Tx Transfer size              */', '222': '', '223': '  __IO uint16_t            TxXferCount;              /*!< UART Tx Transfer Counter           */', '224': '', '225': '  uint8_t                  *pRxBuffPtr;              /*!< Pointer to UART Rx transfer Buffer */', '226': '', '227': '  uint16_t                 RxXferSize;               /*!< UART Rx Transfer size              */', '228': '', '229': '  __IO uint16_t            RxXferCount;              /*!< UART Rx Transfer Counter           */', '230': '', '231': '  uint16_t                 Mask;                     /*!< UART Rx RDR register mask          */', '232': '', '233': '  __IO HAL_UART_RxTypeTypeDef ReceptionType;         /*!< Type of ongoing reception          */', '234': '', '235': '  __IO HAL_UART_RxEventTypeTypeDef RxEventType;      /*!< Type of Rx Event                   */', '236': '', '237': '  void (*RxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Rx IRQ handler */', '238': '', '239': '  void (*TxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Tx IRQ handler */', '240': '', '241': '  DMA_HandleTypeDef        *hdmatx;                  /*!< UART Tx DMA Handle parameters      */', '242': '', '243': '  DMA_HandleTypeDef        *hdmarx;                  /*!< UART Rx DMA Handle parameters      */', '244': '', '245': '  HAL_LockTypeDef           Lock;                    /*!< Locking object                     */', '246': '', '247': '  __IO HAL_UART_StateTypeDef    gState;              /*!< UART state information related to global Handle management', '248': '                                                          and also related to Tx operations. This parameter', '249': '                                                          can be a value of @ref HAL_UART_StateTypeDef */', '250': '', '251': '  __IO HAL_UART_StateTypeDef    RxState;             /*!< UART state information related to Rx operations. This', '252': '                                                          parameter can be a value of @ref HAL_UART_StateTypeDef */', '253': '', '254': '  __IO uint32_t                 ErrorCode;           /*!< UART Error code                    */', '255': '', '256': '#if (USE_HAL_UART_REGISTER_CALLBACKS == 1)', '257': '  void (* TxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Tx Half Complete Callback        */', '258': '  void (* TxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Tx Complete Callback             */', '259': '  void (* RxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Rx Half Complete Callback        */', '260': '  void (* RxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Rx Complete Callback             */', '261': '  void (* ErrorCallback)(struct __UART_HandleTypeDef *huart);             /*!< UART Error Callback                   */', '262': '  void (* AbortCpltCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Abort Complete Callback          */', '263': '  void (* AbortTransmitCpltCallback)(struct __UART_HandleTypeDef *huart); /*!< UART Abort Transmit Complete Callback */', '264': '  void (* AbortReceiveCpltCallback)(struct __UART_HandleTypeDef *huart);  /*!< UART Abort Receive Complete Callback  */', '265': '#if defined(USART_CR1_UESM)', '266': '#if defined(USART_CR3_WUFIE)', '267': '  void (* WakeupCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Wakeup Callback                  */', '268': '#endif /* USART_CR3_WUFIE */', '269': '#endif /* USART_CR1_UESM */', '270': '  void (* RxEventCallback)(struct __UART_HandleTypeDef *huart, uint16_t Pos); /*!< UART Reception Event Callback     */', '271': '', '272': '  void (* MspInitCallback)(struct __UART_HandleTypeDef *huart);           /*!< UART Msp Init callback                */', '273': '  void (* MspDeInitCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Msp DeInit callback              */', '274': '#endif  /* USE_HAL_UART_REGISTER_CALLBACKS */', '275': '', '276': '} UART_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'UART_InitTypeDef', 'AdvancedInit': 'UART_AdvFeatureInitTypeDef', 'pTxBuffPtr': 'unsigned char *', 'TxXferSize': 'ushort', 'TxXferCount': '__ino_t', 'pRxBuffPtr': 'unsigned char *', 'RxXferSize': '__nlink_t', 'RxXferCount': 'UINT16', 'Mask': 'UINT16', 'ReceptionType': '__fd_mask', 'RxEventType': 'ulong', 'RxISR': '..(*)(..)', 'TxISR': '..(*)(..)', 'hdmatx': '__DMA_HandleTypeDef *', 'hdmarx': '__DMA_HandleTypeDef *', 'Lock': 'HAL_LockTypeDef', 'gState': '__fd_mask', 'RxState': 'ulong', 'ErrorCode': 'unsigned long'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "97d71990-df53-442e-bbf6-9a000e4a6bbc",
+      "tool_call_id": "call_00_08v9WuH5vO9RpXERp9isPFe5",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the `UART_SetConfig` function, I can now provide the classification and reasoning:\n\n## Function Classification: **INIT**\n\n### Analysis Summary:\n\n**Function Purpose**: `UART_SetConfig` is a configuration function that sets up UART peripheral parameters including baud rate, word length, stop bits, parity, mode, hardware flow control, and oversampling settings.\n\n**Key Characteristics Identified:**\n\n1. **Peripheral Configuration Function**: The function configures UART control registers (CR1, CR2, CR3) and baud rate register (BRR)\n2. **MMIO Operations**: \n   - Direct register writes using `MODIFY_REG` macro for CR1, CR2, CR3 registers\n   - Direct assignment to `huart->Instance->BRR` for baud rate configuration\n3. **No Data Transmission/Reception**: The function does not perform any actual data I/O operations\n4. **No Interrupt Handling**: While it clears ISR function pointers (`RxISR` and `TxISR`), it doesn't enable or handle interrupts\n5. **Called from Initialization Functions**: The call stack shows it's called from various UART initialization functions (`HAL_UART_Init`, `HAL_HalfDuplex_Init`, etc.)\n\n### Reasoning for INIT Classification:\n\n- **Primary Function**: Configures UART peripheral hardware settings during initialization\n- **MMIO Operations**: Performs direct peripheral register configuration (CR1, CR2, CR3, BRR)\n- **No Data I/O**: Does not involve data transmission or reception operations\n- **No IRQ Operations**: While it clears ISR pointers, it doesn't enable or handle interrupts\n- **Initialization Context**: Used as part of UART initialization sequence\n\n### Replacement Strategy (INIT Category):\n- Remove MMIO operations (register writes to CR1, CR2, CR3, BRR)\n- Preserve parameter validation and configuration logic\n- Keep the function structure and return status handling\n- Maintain the clearing of ISR function pointers as this is part of state management\n\nThis function is clearly an initialization function that sets up UART peripheral configuration but doesn't involve actual data transfer or interrupt handling, making it suitable for the INIT category.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 468,
+          "prompt_tokens": 17963,
+          "total_tokens": 18431,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 15168
+          },
+          "prompt_cache_hit_tokens": 15168,
+          "prompt_cache_miss_tokens": 2795
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--fe3fcff3-5a99-49ad-9bb0-c7eda14d06e4-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 17963,
+        "output_tokens": 468,
+        "total_tokens": 18431,
+        "input_token_details": {
+          "cache_read": 15168
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "UART_SetConfig",
+    "function_type": "INIT",
+    "functionality": "Configures UART peripheral parameters including baud rate, word length, stop bits, parity, mode, hardware flow control, and oversampling settings",
+    "classification_reason": "This is an initialization function that sets up UART peripheral hardware configuration. It performs MMIO operations to configure control registers (CR1, CR2, CR3) and baud rate register (BRR), but does not involve data transmission/reception or interrupt handling. The function is called from various UART initialization routines and focuses on peripheral setup rather than runtime operations.",
+    "has_replacement": true,
+    "function_replacement": "/**\n* @brief Configure the UART peripheral (POSIX replacement).\n* @param huart UART handle.\n* @retval HAL status\n*/\nHAL_StatusTypeDef UART_SetConfig(UART_HandleTypeDef *huart)\n{\n  HAL_StatusTypeDef ret = HAL_OK;\n\n  /* Check the parameters */\n  assert_param(IS_UART_BAUDRATE(huart->Init.BaudRate));\n  assert_param(IS_UART_WORD_LENGTH(huart->Init.WordLength));\n  assert_param(IS_UART_STOPBITS(huart->Init.StopBits));\n  assert_param(IS_UART_ONE_BIT_SAMPLE(huart->Init.OneBitSampling));\n\n  assert_param(IS_UART_PARITY(huart->Init.Parity));\n  assert_param(IS_UART_MODE(huart->Init.Mode));\n  assert_param(IS_UART_HARDWARE_FLOW_CONTROL(huart->Init.HwFlowCtl));\n  assert_param(IS_UART_OVERSAMPLING(huart->Init.OverSampling));\n\n  /* POSIX replacement: Skip MMIO operations for CR1, CR2, CR3, and BRR registers */\n  /* Original MMIO operations removed:\n   * - MODIFY_REG(huart->Instance->CR1, USART_CR1_FIELDS, tmpreg);\n   * - MODIFY_REG(huart->Instance->CR2, USART_CR2_STOP, huart->Init.StopBits);\n   * - MODIFY_REG(huart->Instance->CR3, USART_CR3_FIELDS, tmpreg);\n   * - huart->Instance->BRR = brrtemp;\n   * - huart->Instance->BRR = (uint16_t)usartdiv;\n   */\n\n  /* Clear ISR function pointers (preserved for state management) */\n  huart->RxISR = NULL;\n  huart->TxISR = NULL;\n\n  return ret;\n}"
+  }
+}

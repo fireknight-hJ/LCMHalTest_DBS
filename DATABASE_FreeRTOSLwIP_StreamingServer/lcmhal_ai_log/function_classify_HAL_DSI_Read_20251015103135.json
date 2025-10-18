@@ -1,0 +1,348 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "b2c4c260-e6ee-4850-ac9e-493961db6364"
+    },
+    {
+      "content": "Classify the function : HAL_DSI_Read",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "18d7d89e-3d40-4f74-8535-8c139538104f",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `HAL_DSI_Read` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_9zbro6zlbo1HisQOhnB4SykH",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_DSI_Read\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 54,
+          "prompt_tokens": 1671,
+          "total_tokens": 1725,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 7
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--167be3c5-0dcf-4385-9f9d-1ec5d18056d0-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_DSI_Read"
+          },
+          "id": "call_00_9zbro6zlbo1HisQOhnB4SykH",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1671,
+        "output_tokens": 54,
+        "total_tokens": 1725,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', location_line=1750, function_content='/**\\n* @brief  Read command (DCS or generic)\\n* @param  hdsi  pointer to a DSI_HandleTypeDef structure that contains\\n*               the configuration information for the DSI.\\n* @param  ChannelNbr  Virtual channel ID\\n* @param  Array pointer to a buffer to store the payload of a read back operation.\\n* @param  Size  Data size to be read (in byte).\\n* @param  Mode  DSI read packet data type.\\n*               This parameter can be any value of @arg DSI_SHORT_READ_PKT_Data_Type.\\n* @param  DCSCmd  DCS get/read command.\\n* @param  ParametersTable  Pointer to parameter values table.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_DSI_Read(DSI_HandleTypeDef *hdsi,\\n                               uint32_t ChannelNbr,\\n                               uint8_t *Array,\\n                               uint32_t Size,\\n                               uint32_t Mode,\\n                               uint32_t DCSCmd,\\n                               uint8_t *ParametersTable)\\n{\\n  uint32_t tickstart;\\n  uint8_t *pdata = Array;\\n  uint32_t datasize = Size;\\n  uint32_t fifoword;\\n  uint32_t nbbytes;\\n  uint32_t count;\\n\\n  /* Process locked */\\n  __HAL_LOCK(hdsi);\\n\\n  /* Check the parameters */\\n  assert_param(IS_DSI_READ_PACKET_TYPE(Mode));\\n\\n  if (datasize > 2U)\\n  {\\n    /* set max return packet size */\\n    if (DSI_ShortWrite(hdsi, ChannelNbr, DSI_MAX_RETURN_PKT_SIZE, ((datasize) & 0xFFU),\\n                       (((datasize) >> 8U) & 0xFFU)) != HAL_OK)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_ERROR;\\n    }\\n  }\\n\\n  /* Configure the packet to read command */\\n  if (Mode == DSI_DCS_SHORT_PKT_READ)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, DCSCmd, 0U);\\n  }\\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P0)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, 0U, 0U);\\n  }\\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P1)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], 0U);\\n  }\\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P2)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], ParametersTable[1U]);\\n  }\\n  else\\n  {\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hdsi);\\n\\n    return HAL_ERROR;\\n  }\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* If DSI fifo is not empty, read requested bytes */\\n  while (((int32_t)(datasize)) > 0)\\n  {\\n    if ((hdsi->Instance->GPSR & DSI_GPSR_PRDFE) == 0U)\\n    {\\n      fifoword = hdsi->Instance->GPDR;\\n      nbbytes = (datasize < 4U) ? datasize : 4U;\\n\\n      for (count = 0U; count < nbbytes; count++)\\n      {\\n        *pdata = (uint8_t)(fifoword >> (8U * count));\\n        pdata++;\\n        datasize--;\\n      }\\n    }\\n\\n    /* Check for the Timeout */\\n    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_TIMEOUT;\\n    }\\n\\n    /* Software workaround to avoid HAL_TIMEOUT when a DSI read command is   */\\n    /* issued to the panel and the read data is not captured by the DSI Host */\\n    /* which returns Packet Size Error.                                      */\\n    /* Need to ensure that the Read command has finished before checking PSE */\\n    if ((hdsi->Instance->GPSR & DSI_GPSR_RCB) == 0U)\\n    {\\n      if ((hdsi->Instance->ISR[1U] & DSI_ISR1_PSE) == DSI_ISR1_PSE)\\n      {\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hdsi);\\n\\n        return HAL_ERROR;\\n      }\\n    }\\n  }\\n\\n  /* Process unlocked */\\n  __HAL_UNLOCK(hdsi);\\n\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'1750': 'HAL_StatusTypeDef HAL_DSI_Read(DSI_HandleTypeDef *hdsi,', '1751': '                               uint32_t ChannelNbr,', '1752': '                               uint8_t *Array,', '1753': '                               uint32_t Size,', '1754': '                               uint32_t Mode,', '1755': '                               uint32_t DCSCmd,', '1756': '                               uint8_t *ParametersTable)', '1757': '{', '1758': '  uint32_t tickstart;', '1759': '  uint8_t *pdata = Array;', '1760': '  uint32_t datasize = Size;', '1761': '  uint32_t fifoword;', '1762': '  uint32_t nbbytes;', '1763': '  uint32_t count;', '1764': '', '1765': '  /* Process locked */', '1766': '  __HAL_LOCK(hdsi);', '1767': '', '1768': '  /* Check the parameters */', '1769': '  assert_param(IS_DSI_READ_PACKET_TYPE(Mode));', '1770': '', '1771': '  if (datasize > 2U)', '1772': '  {', '1773': '    /* set max return packet size */', '1774': '    if (DSI_ShortWrite(hdsi, ChannelNbr, DSI_MAX_RETURN_PKT_SIZE, ((datasize) & 0xFFU),', '1775': '                       (((datasize) >> 8U) & 0xFFU)) != HAL_OK)', '1776': '    {', '1777': '      /* Process Unlocked */', '1778': '      __HAL_UNLOCK(hdsi);', '1779': '', '1780': '      return HAL_ERROR;', '1781': '    }', '1782': '  }', '1783': '', '1784': '  /* Configure the packet to read command */', '1785': '  if (Mode == DSI_DCS_SHORT_PKT_READ)', '1786': '  {', '1787': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, DCSCmd, 0U);', '1788': '  }', '1789': '  else if (Mode == DSI_GEN_SHORT_PKT_READ_P0)', '1790': '  {', '1791': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, 0U, 0U);', '1792': '  }', '1793': '  else if (Mode == DSI_GEN_SHORT_PKT_READ_P1)', '1794': '  {', '1795': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], 0U);', '1796': '  }', '1797': '  else if (Mode == DSI_GEN_SHORT_PKT_READ_P2)', '1798': '  {', '1799': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], ParametersTable[1U]);', '1800': '  }', '1801': '  else', '1802': '  {', '1803': '    /* Process Unlocked */', '1804': '    __HAL_UNLOCK(hdsi);', '1805': '', '1806': '    return HAL_ERROR;', '1807': '  }', '1808': '', '1809': '  /* Get tick */', '1810': '  tickstart = HAL_GetTick();', '1811': '', '1812': '  /* If DSI fifo is not empty, read requested bytes */', '1813': '  while (((int32_t)(datasize)) > 0)', '1814': '  {', '1815': '    if ((hdsi->Instance->GPSR & DSI_GPSR_PRDFE) == 0U)', '1816': '    {', '1817': '      fifoword = hdsi->Instance->GPDR;', '1818': '      nbbytes = (datasize < 4U) ? datasize : 4U;', '1819': '', '1820': '      for (count = 0U; count < nbbytes; count++)', '1821': '      {', '1822': '        *pdata = (uint8_t)(fifoword >> (8U * count));', '1823': '        pdata++;', '1824': '        datasize--;', '1825': '      }', '1826': '    }', '1827': '', '1828': '    /* Check for the Timeout */', '1829': '    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '1830': '    {', '1831': '      /* Process Unlocked */', '1832': '      __HAL_UNLOCK(hdsi);', '1833': '', '1834': '      return HAL_TIMEOUT;', '1835': '    }', '1836': '', '1837': '    /* Software workaround to avoid HAL_TIMEOUT when a DSI read command is   */', '1838': '    /* issued to the panel and the read data is not captured by the DSI Host */', '1839': '    /* which returns Packet Size Error.                                      */', '1840': '    /* Need to ensure that the Read command has finished before checking PSE */', '1841': '    if ((hdsi->Instance->GPSR & DSI_GPSR_RCB) == 0U)', '1842': '    {', '1843': '      if ((hdsi->Instance->ISR[1U] & DSI_ISR1_PSE) == DSI_ISR1_PSE)', '1844': '      {', '1845': '        /* Process Unlocked */', '1846': '        __HAL_UNLOCK(hdsi);', '1847': '', '1848': '        return HAL_ERROR;', '1849': '      }', '1850': '    }', '1851': '  }', '1852': '', '1853': '  /* Process unlocked */', '1854': '  __HAL_UNLOCK(hdsi);', '1855': '', '1856': '  return HAL_OK;', '1857': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "36d628bc-e671-4b0f-92e4-f5f433ac0ea4",
+      "tool_call_id": "call_00_9zbro6zlbo1HisQOhnB4SykH",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand the peripheral register access patterns:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_9kR9zFOd1iSdYPWenL0TlJOd",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_DSI_Read\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 43,
+          "prompt_tokens": 4523,
+          "total_tokens": 4566,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 2859
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--1e042ffa-b2d4-4f76-a3f5-cb9107e7ea5a-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_DSI_Read"
+          },
+          "id": "call_00_9kR9zFOd1iSdYPWenL0TlJOd",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4523,
+        "output_tokens": 43,
+        "total_tokens": 4566,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', location_line=1750, function_content='/**\\n* @brief  Read command (DCS or generic)\\n* @param  hdsi  pointer to a DSI_HandleTypeDef structure that contains\\n*               the configuration information for the DSI.\\n* @param  ChannelNbr  Virtual channel ID\\n* @param  Array pointer to a buffer to store the payload of a read back operation.\\n* @param  Size  Data size to be read (in byte).\\n* @param  Mode  DSI read packet data type.\\n*               This parameter can be any value of @arg DSI_SHORT_READ_PKT_Data_Type.\\n* @param  DCSCmd  DCS get/read command.\\n* @param  ParametersTable  Pointer to parameter values table.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_DSI_Read(DSI_HandleTypeDef *hdsi,\\n                               uint32_t ChannelNbr,\\n                               uint8_t *Array,\\n                               uint32_t Size,\\n                               uint32_t Mode,\\n                               uint32_t DCSCmd,\\n                               uint8_t *ParametersTable)\\n{\\n  uint32_t tickstart;\\n  uint8_t *pdata = Array;\\n  uint32_t datasize = Size;\\n  uint32_t fifoword;\\n  uint32_t nbbytes;\\n  uint32_t count;\\n\\n  /* Process locked */\\n  __HAL_LOCK(hdsi);\\n\\n  /* Check the parameters */\\n  assert_param(IS_DSI_READ_PACKET_TYPE(Mode));\\n\\n  if (datasize > 2U)\\n  {\\n    /* set max return packet size */\\n    if (DSI_ShortWrite(hdsi, ChannelNbr, DSI_MAX_RETURN_PKT_SIZE, ((datasize) & 0xFFU),\\n                       (((datasize) >> 8U) & 0xFFU)) != HAL_OK)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_ERROR;\\n    }\\n  }\\n\\n  /* Configure the packet to read command */\\n  if (Mode == DSI_DCS_SHORT_PKT_READ)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, DCSCmd, 0U);\\n  }\\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P0)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, 0U, 0U);\\n  }\\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P1)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], 0U);\\n  }\\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P2)\\n  {\\n    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], ParametersTable[1U]);\\n  }\\n  else\\n  {\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hdsi);\\n\\n    return HAL_ERROR;\\n  }\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* If DSI fifo is not empty, read requested bytes */\\n  while (((int32_t)(datasize)) > 0)\\n  {\\n    if ((hdsi->Instance->GPSR & DSI_GPSR_PRDFE) == 0U)\\n    {\\n      fifoword = hdsi->Instance->GPDR;\\n      nbbytes = (datasize < 4U) ? datasize : 4U;\\n\\n      for (count = 0U; count < nbbytes; count++)\\n      {\\n        *pdata = (uint8_t)(fifoword >> (8U * count));\\n        pdata++;\\n        datasize--;\\n      }\\n    }\\n\\n    /* Check for the Timeout */\\n    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_TIMEOUT;\\n    }\\n\\n    /* Software workaround to avoid HAL_TIMEOUT when a DSI read command is   */\\n    /* issued to the panel and the read data is not captured by the DSI Host */\\n    /* which returns Packet Size Error.                                      */\\n    /* Need to ensure that the Read command has finished before checking PSE */\\n    if ((hdsi->Instance->GPSR & DSI_GPSR_RCB) == 0U)\\n    {\\n      if ((hdsi->Instance->ISR[1U] & DSI_ISR1_PSE) == DSI_ISR1_PSE)\\n      {\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hdsi);\\n\\n        return HAL_ERROR;\\n      }\\n    }\\n  }\\n\\n  /* Process unlocked */\\n  __HAL_UNLOCK(hdsi);\\n\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'1750': 'HAL_StatusTypeDef HAL_DSI_Read(DSI_HandleTypeDef *hdsi,', '1751': '                               uint32_t ChannelNbr,', '1752': '                               uint8_t *Array,', '1753': '                               uint32_t Size,', '1754': '                               uint32_t Mode,', '1755': '                               uint32_t DCSCmd,', '1756': '                               uint8_t *ParametersTable)', '1757': '{', '1758': '  uint32_t tickstart;', '1759': '  uint8_t *pdata = Array;', '1760': '  uint32_t datasize = Size;', '1761': '  uint32_t fifoword;', '1762': '  uint32_t nbbytes;', '1763': '  uint32_t count;', '1764': '', '1765': '  /* Process locked */', '1766': '  __HAL_LOCK(hdsi);', '1767': '', '1768': '  /* Check the parameters */', '1769': '  assert_param(IS_DSI_READ_PACKET_TYPE(Mode));', '1770': '', '1771': '  if (datasize > 2U)', '1772': '  {', '1773': '    /* set max return packet size */', '1774': '    if (DSI_ShortWrite(hdsi, ChannelNbr, DSI_MAX_RETURN_PKT_SIZE, ((datasize) & 0xFFU),', '1775': '                       (((datasize) >> 8U) & 0xFFU)) != HAL_OK)', '1776': '    {', '1777': '      /* Process Unlocked */', '1778': '      __HAL_UNLOCK(hdsi);', '1779': '', '1780': '      return HAL_ERROR;', '1781': '    }', '1782': '  }', '1783': '', '1784': '  /* Configure the packet to read command */', '1785': '  if (Mode == DSI_DCS_SHORT_PKT_READ)', '1786': '  {', '1787': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, DCSCmd, 0U);', '1788': '  }', '1789': '  else if (Mode == DSI_GEN_SHORT_PKT_READ_P0)', '1790': '  {', '1791': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, 0U, 0U);', '1792': '  }', '1793': '  else if (Mode == DSI_GEN_SHORT_PKT_READ_P1)', '1794': '  {', '1795': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], 0U);', '1796': '  }', '1797': '  else if (Mode == DSI_GEN_SHORT_PKT_READ_P2)', '1798': '  {', '1799': '    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], ParametersTable[1U]);', '1800': '  }', '1801': '  else', '1802': '  {', '1803': '    /* Process Unlocked */', '1804': '    __HAL_UNLOCK(hdsi);', '1805': '', '1806': '    return HAL_ERROR;', '1807': '  }', '1808': '', '1809': '  /* Get tick */', '1810': '  tickstart = HAL_GetTick();', '1811': '', '1812': '  /* If DSI fifo is not empty, read requested bytes */', '1813': '  while (((int32_t)(datasize)) > 0)', '1814': '  {', '1815': '    if ((hdsi->Instance->GPSR & DSI_GPSR_PRDFE) == 0U)', '1816': '    {', '1817': '      fifoword = hdsi->Instance->GPDR;', '1818': '      nbbytes = (datasize < 4U) ? datasize : 4U;', '1819': '', '1820': '      for (count = 0U; count < nbbytes; count++)', '1821': '      {', '1822': '        *pdata = (uint8_t)(fifoword >> (8U * count));', '1823': '        pdata++;', '1824': '        datasize--;', '1825': '      }', '1826': '    }', '1827': '', '1828': '    /* Check for the Timeout */', '1829': '    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '1830': '    {', '1831': '      /* Process Unlocked */', '1832': '      __HAL_UNLOCK(hdsi);', '1833': '', '1834': '      return HAL_TIMEOUT;', '1835': '    }', '1836': '', '1837': '    /* Software workaround to avoid HAL_TIMEOUT when a DSI read command is   */', '1838': '    /* issued to the panel and the read data is not captured by the DSI Host */', '1839': '    /* which returns Packet Size Error.                                      */', '1840': '    /* Need to ensure that the Read command has finished before checking PSE */', '1841': '    if ((hdsi->Instance->GPSR & DSI_GPSR_RCB) == 0U)', '1842': '    {', '1843': '      if ((hdsi->Instance->ISR[1U] & DSI_ISR1_PSE) == DSI_ISR1_PSE)', '1844': '      {', '1845': '        /* Process Unlocked */', '1846': '        __HAL_UNLOCK(hdsi);', '1847': '', '1848': '        return HAL_ERROR;', '1849': '      }', '1850': '    }', '1851': '  }', '1852': '', '1853': '  /* Process unlocked */', '1854': '  __HAL_UNLOCK(hdsi);', '1855': '', '1856': '  return HAL_OK;', '1857': '}'})\nMMIO Exprs info: [MmioExprInfo(name='pdata', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1822, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pdata', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1823, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='Array', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1759, expr_type='varaccess', enclosing_type='init'), MmioExprInfo(name='count', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1820, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='count', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1820, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='count', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1822, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='fifoword', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1817, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='fifoword', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1822, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='* ...', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1822, expr_type='unary', enclosing_type='assign_from'), MmioExprInfo(name='... & ...', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1815, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1841, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1843, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... >> ...', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1822, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... * ...', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1822, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... ++', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1820, expr_type='unary', enclosing_type='control_flow'), MmioExprInfo(name='... ++', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1823, expr_type='unary', enclosing_type='stmt'), MmioExprInfo(name='access to array', function='HAL_DSI_Read', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1843, expr_type='array', enclosing_type='skip')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "c9f7e045-4ebd-4fd1-b1f3-3e33bd1d1237",
+      "tool_call_id": "call_00_9kR9zFOd1iSdYPWenL0TlJOd",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_dSimlBN55RVgc02bNyhRlZde",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_DSI_Read\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 8789,
+          "total_tokens": 8826,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4544
+          },
+          "prompt_cache_hit_tokens": 4544,
+          "prompt_cache_miss_tokens": 4245
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--aca0f434-aec5-4856-a3b8-2f9a5bb76d46-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_DSI_Read"
+          },
+          "id": "call_00_dSimlBN55RVgc02bNyhRlZde",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 8789,
+        "output_tokens": 37,
+        "total_tokens": 8826,
+        "input_token_details": {
+          "cache_read": 4544
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1810, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1810, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1829, call_type='direct', ret_type='noReturnValue', start_line_content='    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='DSI_ShortWrite', call_tag='call to DSI_ShortWrite', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1774, call_type='direct', ret_type='noReturnValue', start_line_content='    if (DSI_ShortWrite(hdsi, ChannelNbr, DSI_MAX_RETURN_PKT_SIZE, ((datasize) & 0xFFU),'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='DSI_ConfigPacketHeader', call_tag='call to DSI_ConfigPacketHeader', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1787, call_type='direct', ret_type='noReturnValue', start_line_content='    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, DCSCmd, 0U);'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='DSI_ConfigPacketHeader', call_tag='call to DSI_ConfigPacketHeader', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1791, call_type='direct', ret_type='noReturnValue', start_line_content='    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, 0U, 0U);'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='DSI_ConfigPacketHeader', call_tag='call to DSI_ConfigPacketHeader', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1795, call_type='direct', ret_type='noReturnValue', start_line_content='    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], 0U);'), FunctionCallInfo(caller_name='HAL_DSI_Read', callee_name='DSI_ConfigPacketHeader', call_tag='call to DSI_ConfigPacketHeader', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=1799, call_type='direct', ret_type='noReturnValue', start_line_content='    DSI_ConfigPacketHeader(hdsi->Instance, ChannelNbr, Mode, ParametersTable[0U], ParametersTable[1U]);')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "b4d87306-293d-4e97-9ccb-f1f56b876baa",
+      "tool_call_id": "call_00_dSimlBN55RVgc02bNyhRlZde",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the DSI_HandleTypeDef structure to understand the peripheral register access:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_gyiI9xYPnzekTYoRCP1fPkhK",
+            "function": {
+              "arguments": "{\"struct_name\": \"DSI_HandleTypeDef\"}",
+              "name": "collect_struct_or_enum_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 42,
+          "prompt_tokens": 9885,
+          "total_tokens": 9927,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 8768
+          },
+          "prompt_cache_hit_tokens": 8768,
+          "prompt_cache_miss_tokens": 1117
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--93117dd2-373e-4380-bdb7-9c42d5eeef89-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "DSI_HandleTypeDef"
+          },
+          "id": "call_00_gyiI9xYPnzekTYoRCP1fPkhK",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9885,
+        "output_tokens": 42,
+        "total_tokens": 9927,
+        "input_token_details": {
+          "cache_read": 8768
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='DSI_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dsi.h', location_line=310, struct_content='#endif /* USE_HAL_DSI_REGISTER_CALLBACKS */\\n{\\n  DSI_TypeDef               *Instance;    /*!< Register base address      */\\n  DSI_InitTypeDef           Init;         /*!< DSI required parameters    */\\n  HAL_LockTypeDef           Lock;         /*!< DSI peripheral status      */\\n  __IO HAL_DSI_StateTypeDef State;        /*!< DSI communication state    */\\n  __IO uint32_t             ErrorCode;    /*!< DSI Error code             */\\n  uint32_t                  ErrorMsk;     /*!< DSI Error monitoring mask  */\\n\\n#if (USE_HAL_DSI_REGISTER_CALLBACKS == 1)\\n  void (* TearingEffectCallback)(struct __DSI_HandleTypeDef *hdsi);   /*!< DSI Tearing Effect Callback */\\n  void (* EndOfRefreshCallback)(struct __DSI_HandleTypeDef *hdsi);    /*!< DSI End Of Refresh Callback */\\n  void (* ErrorCallback)(struct __DSI_HandleTypeDef *hdsi);           /*!< DSI Error Callback          */\\n\\n  void (* MspInitCallback)(struct __DSI_HandleTypeDef *hdsi);         /*!< DSI Msp Init callback       */\\n  void (* MspDeInitCallback)(struct __DSI_HandleTypeDef *hdsi);       /*!< DSI Msp DeInit callback     */\\n\\n#endif /* USE_HAL_DSI_REGISTER_CALLBACKS */\\n\\n} DSI_HandleTypeDef;\\n', struct_content_in_lines={'310': '{', '311': '  DSI_TypeDef               *Instance;    /*!< Register base address      */', '312': '  DSI_InitTypeDef           Init;         /*!< DSI required parameters    */', '313': '  HAL_LockTypeDef           Lock;         /*!< DSI peripheral status      */', '314': '  __IO HAL_DSI_StateTypeDef State;        /*!< DSI communication state    */', '315': '  __IO uint32_t             ErrorCode;    /*!< DSI Error code             */', '316': '  uint32_t                  ErrorMsk;     /*!< DSI Error monitoring mask  */', '317': '', '318': '#if (USE_HAL_DSI_REGISTER_CALLBACKS == 1)', '319': '  void (* TearingEffectCallback)(struct __DSI_HandleTypeDef *hdsi);   /*!< DSI Tearing Effect Callback */', '320': '  void (* EndOfRefreshCallback)(struct __DSI_HandleTypeDef *hdsi);    /*!< DSI End Of Refresh Callback */', '321': '  void (* ErrorCallback)(struct __DSI_HandleTypeDef *hdsi);           /*!< DSI Error Callback          */', '322': '', '323': '  void (* MspInitCallback)(struct __DSI_HandleTypeDef *hdsi);         /*!< DSI Msp Init callback       */', '324': '  void (* MspDeInitCallback)(struct __DSI_HandleTypeDef *hdsi);       /*!< DSI Msp DeInit callback     */', '325': '', '326': '#endif /* USE_HAL_DSI_REGISTER_CALLBACKS */', '327': '', '328': '} DSI_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'DSI_InitTypeDef', 'Lock': '(unnamed enum)', 'State': '(unnamed enum)', 'ErrorCode': '__fd_mask', 'ErrorMsk': 'unsigned long'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "2217410f-cdcc-4b21-b219-634331aad1cf",
+      "tool_call_id": "call_00_gyiI9xYPnzekTYoRCP1fPkhK",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the `HAL_DSI_Read` function, here is my classification:\n\n## Function Classification: **RECV**\n\n### Reasoning:\n\n1. **Primary Functionality**: This function performs data reception operations from a DSI (Display Serial Interface) peripheral. The core functionality is reading data from the DSI FIFO into a user-provided buffer.\n\n2. **Critical Data I/O Operations**: \n   - The function reads data from peripheral registers (`hdsi->Instance->GPDR`) into the user buffer (`Array`)\n   - It processes the data in chunks (up to 4 bytes at a time) from the DSI FIFO\n   - The main data transfer occurs in lines 1815-1826 where it reads from `hdsi->Instance->GPDR` and writes to `*pdata`\n\n3. **Peripheral Register Access**: \n   - Accesses multiple DSI peripheral registers:\n     - `hdsi->Instance->GPSR` (General Purpose Status Register) for checking FIFO status\n     - `hdsi->Instance->GPDR` (General Purpose Data Register) for reading actual data\n     - `hdsi->Instance->ISR[1U]` (Interrupt Status Register) for error checking\n\n4. **Buffer Management**: \n   - Takes an `Array` parameter as output buffer to store received data\n   - Manages data transfer with proper byte ordering and size handling\n\n5. **No Interrupt Operations**: \n   - The function does not contain IRQ enable/disable operations or interrupt handlers\n   - It uses polling to check peripheral status\n\n6. **Complex Mixed Logic**: \n   - While it contains some configuration logic (packet header configuration), the primary purpose is data reception\n   - The function includes timeout handling and error checking, but the core operation is data transfer\n\n### Replacement Strategy:\nSince this is a RECV function, the replacement should redirect the I/O operations to POSIX-equivalent interfaces. The function reads data from the DSI peripheral into a user buffer, so we should use the appropriate HAL_BE function for data reception.\n\n**Note**: This function reads from a display interface (DSI), which is typically used for display data. The replacement should simulate reading display-related data or use appropriate mock data for the specific use case.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 482,
+          "prompt_tokens": 10854,
+          "total_tokens": 11336,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 9920
+          },
+          "prompt_cache_hit_tokens": 9920,
+          "prompt_cache_miss_tokens": 934
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--e0147598-e11b-4408-bd83-62fd2c4d8ad9-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 10854,
+        "output_tokens": 482,
+        "total_tokens": 11336,
+        "input_token_details": {
+          "cache_read": 9920
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_DSI_Read",
+    "function_type": "RECV",
+    "functionality": "Reads data from DSI (Display Serial Interface) peripheral FIFO into user buffer, handling different packet types and error conditions",
+    "classification_reason": "This function performs critical data reception operations from peripheral registers (hdsi->Instance->GPDR) into user-provided buffer (Array). It reads data from DSI FIFO in chunks, manages data transfer with proper byte ordering, and includes timeout handling. The core functionality is data I/O from peripheral to application buffer, making it a RECV type function.",
+    "has_replacement": true,
+    "function_replacement": "/**\n* @brief  Read command (DCS or generic) - POSIX Replacement\n* @param  hdsi  pointer to a DSI_HandleTypeDef structure that contains\n*               the configuration information for the DSI.\n* @param  ChannelNbr  Virtual channel ID\n* @param  Array pointer to a buffer to store the payload of a read back operation.\n* @param  Size  Data size to be read (in byte).\n* @param  Mode  DSI read packet data type.\n*               This parameter can be any value of @arg DSI_SHORT_READ_PKT_Data_Type.\n* @param  DCSCmd  DCS get/read command.\n* @param  ParametersTable  Pointer to parameter values table.\n* @retval HAL status\n*/\nHAL_StatusTypeDef HAL_DSI_Read(DSI_HandleTypeDef *hdsi,\n                               uint32_t ChannelNbr,\n                               uint8_t *Array,\n                               uint32_t Size,\n                               uint32_t Mode,\n                               uint32_t DCSCmd,\n                               uint8_t *ParametersTable)\n{\n  uint32_t tickstart;\n  uint8_t *pdata = Array;\n  uint32_t datasize = Size;\n  uint32_t count;\n\n  /* Process locked */\n  __HAL_LOCK(hdsi);\n\n  /* Check the parameters */\n  assert_param(IS_DSI_READ_PACKET_TYPE(Mode));\n\n  /* Configure the packet to read command - preserve configuration logic */\n  if (Mode == DSI_DCS_SHORT_PKT_READ)\n  {\n    /* Configuration preserved but no actual register access */\n  }\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P0)\n  {\n    /* Configuration preserved but no actual register access */\n  }\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P1)\n  {\n    /* Configuration preserved but no actual register access */\n  }\n  else if (Mode == DSI_GEN_SHORT_PKT_READ_P2)\n  {\n    /* Configuration preserved but no actual register access */\n  }\n  else\n  {\n    /* Process Unlocked */\n    __HAL_UNLOCK(hdsi);\n\n    return HAL_ERROR;\n  }\n\n  /* Get tick */\n  tickstart = HAL_GetTick();\n\n  /* Replace DSI FIFO read with HAL_BE data reception */\n  /* Use HAL_BE_ENET_ReadFrame for packet-based data or HAL_BE_In for byte stream */\n  int bytes_read = HAL_BE_In((void*)Array, Size);\n  \n  if (bytes_read < 0) {\n    /* Process Unlocked */\n    __HAL_UNLOCK(hdsi);\n    return HAL_ERROR;\n  }\n  \n  /* Update actual data size read */\n  datasize = bytes_read;\n\n  /* Process unlocked */\n  __HAL_UNLOCK(hdsi);\n\n  return HAL_OK;\n}"
+  }
+}

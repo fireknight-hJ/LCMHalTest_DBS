@@ -1,0 +1,348 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "57a02e4b-504e-4263-8970-3d8ec7097df7"
+    },
+    {
+      "content": "Classify the function : HAL_RCCEx_EnablePLLI2S",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "fdc6b66f-6f1a-4836-af39-4d6ccf19958e",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `HAL_RCCEx_EnablePLLI2S` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_lx6Qu7BuLiIOB2who9HyqZ2M",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_RCCEx_EnablePLLI2S\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 64,
+          "prompt_tokens": 1676,
+          "total_tokens": 1740,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 12
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--11109955-9ba3-4254-a2a2-e84a38d954ca-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_RCCEx_EnablePLLI2S"
+          },
+          "id": "call_00_lx6Qu7BuLiIOB2who9HyqZ2M",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1676,
+        "output_tokens": 64,
+        "total_tokens": 1740,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', location_line=1586, function_content='/**\\n* @brief  Enable PLLI2S.\\n* @param  PLLI2SInit  pointer to an RCC_PLLI2SInitTypeDef structure that\\n*         contains the configuration information for the PLLI2S\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_RCCEx_EnablePLLI2S(RCC_PLLI2SInitTypeDef  *PLLI2SInit)\\n{\\n  uint32_t tickstart;\\n\\n  /* Check for parameters */\\n  assert_param(IS_RCC_PLLI2SN_VALUE(PLLI2SInit->PLLI2SN));\\n  assert_param(IS_RCC_PLLI2SR_VALUE(PLLI2SInit->PLLI2SR));\\n  assert_param(IS_RCC_PLLI2SQ_VALUE(PLLI2SInit->PLLI2SQ));\\n#if defined(RCC_PLLI2SCFGR_PLLI2SP)\\n  assert_param(IS_RCC_PLLI2SP_VALUE(PLLI2SInit->PLLI2SP));\\n#endif /* RCC_PLLI2SCFGR_PLLI2SP */\\n\\n  /* Disable the PLLI2S */\\n  __HAL_RCC_PLLI2S_DISABLE();\\n\\n  /* Wait till PLLI2S is disabled */\\n  tickstart = HAL_GetTick();\\n  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) != RESET)\\n  {\\n    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)\\n    {\\n      /* return in case of Timeout detected */\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n  /* Configure the PLLI2S division factors */\\n#if defined (STM32F722xx) || defined (STM32F723xx) || defined (STM32F732xx) || defined (STM32F733xx) || defined (STM32F730xx)\\n  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */\\n  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */\\n  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */\\n  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);\\n#else\\n  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */\\n  /* I2SPCLK = PLLI2S_VCO / PLLI2SP */\\n  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */\\n  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */\\n  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SP, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);\\n#endif /* STM32F722xx || STM32F723xx || STM32F732xx || STM32F733xx || STM32F730xx */\\n\\n  /* Enable the PLLI2S */\\n  __HAL_RCC_PLLI2S_ENABLE();\\n\\n  /* Wait till PLLI2S is ready */\\n  tickstart = HAL_GetTick();\\n  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) == RESET)\\n  {\\n    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)\\n    {\\n      /* return in case of Timeout detected */\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n return HAL_OK;\\n}\\n', function_content_in_lines={'1586': 'HAL_StatusTypeDef HAL_RCCEx_EnablePLLI2S(RCC_PLLI2SInitTypeDef  *PLLI2SInit)', '1587': '{', '1588': '  uint32_t tickstart;', '1589': '', '1590': '  /* Check for parameters */', '1591': '  assert_param(IS_RCC_PLLI2SN_VALUE(PLLI2SInit->PLLI2SN));', '1592': '  assert_param(IS_RCC_PLLI2SR_VALUE(PLLI2SInit->PLLI2SR));', '1593': '  assert_param(IS_RCC_PLLI2SQ_VALUE(PLLI2SInit->PLLI2SQ));', '1594': '#if defined(RCC_PLLI2SCFGR_PLLI2SP)', '1595': '  assert_param(IS_RCC_PLLI2SP_VALUE(PLLI2SInit->PLLI2SP));', '1596': '#endif /* RCC_PLLI2SCFGR_PLLI2SP */', '1597': '', '1598': '  /* Disable the PLLI2S */', '1599': '  __HAL_RCC_PLLI2S_DISABLE();', '1600': '', '1601': '  /* Wait till PLLI2S is disabled */', '1602': '  tickstart = HAL_GetTick();', '1603': '  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) != RESET)', '1604': '  {', '1605': '    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)', '1606': '    {', '1607': '      /* return in case of Timeout detected */', '1608': '      return HAL_TIMEOUT;', '1609': '    }', '1610': '  }', '1611': '', '1612': '  /* Configure the PLLI2S division factors */', '1613': '#if defined (STM32F722xx) || defined (STM32F723xx) || defined (STM32F732xx) || defined (STM32F733xx) || defined (STM32F730xx)', '1614': '  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */', '1615': '  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */', '1616': '  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */', '1617': '  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);', '1618': '#else', '1619': '  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */', '1620': '  /* I2SPCLK = PLLI2S_VCO / PLLI2SP */', '1621': '  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */', '1622': '  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */', '1623': '  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SP, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);', '1624': '#endif /* STM32F722xx || STM32F723xx || STM32F732xx || STM32F733xx || STM32F730xx */', '1625': '', '1626': '  /* Enable the PLLI2S */', '1627': '  __HAL_RCC_PLLI2S_ENABLE();', '1628': '', '1629': '  /* Wait till PLLI2S is ready */', '1630': '  tickstart = HAL_GetTick();', '1631': '  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) == RESET)', '1632': '  {', '1633': '    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)', '1634': '    {', '1635': '      /* return in case of Timeout detected */', '1636': '      return HAL_TIMEOUT;', '1637': '    }', '1638': '  }', '1639': '', '1640': ' return HAL_OK;', '1641': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "04758606-d127-4a3d-aafc-d28c145e7877",
+      "tool_call_id": "call_00_lx6Qu7BuLiIOB2who9HyqZ2M",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_ZAjnp1z0Ai74zmKfjK8rVP3T",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_RCCEx_EnablePLLI2S\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 48,
+          "prompt_tokens": 3934,
+          "total_tokens": 3982,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 2206
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--a66089d1-0e17-46de-bb9a-49d80eb3826e-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_RCCEx_EnablePLLI2S"
+          },
+          "id": "call_00_ZAjnp1z0Ai74zmKfjK8rVP3T",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3934,
+        "output_tokens": 48,
+        "total_tokens": 3982,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', location_line=1586, function_content='/**\\n* @brief  Enable PLLI2S.\\n* @param  PLLI2SInit  pointer to an RCC_PLLI2SInitTypeDef structure that\\n*         contains the configuration information for the PLLI2S\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_RCCEx_EnablePLLI2S(RCC_PLLI2SInitTypeDef  *PLLI2SInit)\\n{\\n  uint32_t tickstart;\\n\\n  /* Check for parameters */\\n  assert_param(IS_RCC_PLLI2SN_VALUE(PLLI2SInit->PLLI2SN));\\n  assert_param(IS_RCC_PLLI2SR_VALUE(PLLI2SInit->PLLI2SR));\\n  assert_param(IS_RCC_PLLI2SQ_VALUE(PLLI2SInit->PLLI2SQ));\\n#if defined(RCC_PLLI2SCFGR_PLLI2SP)\\n  assert_param(IS_RCC_PLLI2SP_VALUE(PLLI2SInit->PLLI2SP));\\n#endif /* RCC_PLLI2SCFGR_PLLI2SP */\\n\\n  /* Disable the PLLI2S */\\n  __HAL_RCC_PLLI2S_DISABLE();\\n\\n  /* Wait till PLLI2S is disabled */\\n  tickstart = HAL_GetTick();\\n  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) != RESET)\\n  {\\n    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)\\n    {\\n      /* return in case of Timeout detected */\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n  /* Configure the PLLI2S division factors */\\n#if defined (STM32F722xx) || defined (STM32F723xx) || defined (STM32F732xx) || defined (STM32F733xx) || defined (STM32F730xx)\\n  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */\\n  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */\\n  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */\\n  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);\\n#else\\n  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */\\n  /* I2SPCLK = PLLI2S_VCO / PLLI2SP */\\n  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */\\n  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */\\n  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SP, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);\\n#endif /* STM32F722xx || STM32F723xx || STM32F732xx || STM32F733xx || STM32F730xx */\\n\\n  /* Enable the PLLI2S */\\n  __HAL_RCC_PLLI2S_ENABLE();\\n\\n  /* Wait till PLLI2S is ready */\\n  tickstart = HAL_GetTick();\\n  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) == RESET)\\n  {\\n    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)\\n    {\\n      /* return in case of Timeout detected */\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n return HAL_OK;\\n}\\n', function_content_in_lines={'1586': 'HAL_StatusTypeDef HAL_RCCEx_EnablePLLI2S(RCC_PLLI2SInitTypeDef  *PLLI2SInit)', '1587': '{', '1588': '  uint32_t tickstart;', '1589': '', '1590': '  /* Check for parameters */', '1591': '  assert_param(IS_RCC_PLLI2SN_VALUE(PLLI2SInit->PLLI2SN));', '1592': '  assert_param(IS_RCC_PLLI2SR_VALUE(PLLI2SInit->PLLI2SR));', '1593': '  assert_param(IS_RCC_PLLI2SQ_VALUE(PLLI2SInit->PLLI2SQ));', '1594': '#if defined(RCC_PLLI2SCFGR_PLLI2SP)', '1595': '  assert_param(IS_RCC_PLLI2SP_VALUE(PLLI2SInit->PLLI2SP));', '1596': '#endif /* RCC_PLLI2SCFGR_PLLI2SP */', '1597': '', '1598': '  /* Disable the PLLI2S */', '1599': '  __HAL_RCC_PLLI2S_DISABLE();', '1600': '', '1601': '  /* Wait till PLLI2S is disabled */', '1602': '  tickstart = HAL_GetTick();', '1603': '  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) != RESET)', '1604': '  {', '1605': '    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)', '1606': '    {', '1607': '      /* return in case of Timeout detected */', '1608': '      return HAL_TIMEOUT;', '1609': '    }', '1610': '  }', '1611': '', '1612': '  /* Configure the PLLI2S division factors */', '1613': '#if defined (STM32F722xx) || defined (STM32F723xx) || defined (STM32F732xx) || defined (STM32F733xx) || defined (STM32F730xx)', '1614': '  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */', '1615': '  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */', '1616': '  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */', '1617': '  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);', '1618': '#else', '1619': '  /* PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) * PLLI2SN */', '1620': '  /* I2SPCLK = PLLI2S_VCO / PLLI2SP */', '1621': '  /* I2SQCLK = PLLI2S_VCO / PLLI2SQ */', '1622': '  /* I2SRCLK = PLLI2S_VCO / PLLI2SR */', '1623': '  __HAL_RCC_PLLI2S_CONFIG(PLLI2SInit->PLLI2SN, PLLI2SInit->PLLI2SP, PLLI2SInit->PLLI2SQ, PLLI2SInit->PLLI2SR);', '1624': '#endif /* STM32F722xx || STM32F723xx || STM32F732xx || STM32F733xx || STM32F730xx */', '1625': '', '1626': '  /* Enable the PLLI2S */', '1627': '  __HAL_RCC_PLLI2S_ENABLE();', '1628': '', '1629': '  /* Wait till PLLI2S is ready */', '1630': '  tickstart = HAL_GetTick();', '1631': '  while(__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY) == RESET)', '1632': '  {', '1633': '    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)', '1634': '    {', '1635': '      /* return in case of Timeout detected */', '1636': '      return HAL_TIMEOUT;', '1637': '    }', '1638': '  }', '1639': '', '1640': ' return HAL_OK;', '1641': '}'})\nMMIO Exprs info: [MmioExprInfo(name='PLLI2SP', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='PLLI2SQ', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='PLLI2SR', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='PLLI2SN', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1603, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1631, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... | ...', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... << ...', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_RCCEx_EnablePLLI2S', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1623, expr_type='assign', enclosing_type='stmt')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "ea9c5c40-5572-4e03-9a6f-2f4d46941824",
+      "tool_call_id": "call_00_ZAjnp1z0Ai74zmKfjK8rVP3T",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_tzSA5fGHVJNDQ0j7gOFcZdMo",
+            "function": {
+              "arguments": "{\"func_name\": \"HAL_RCCEx_EnablePLLI2S\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 42,
+          "prompt_tokens": 6998,
+          "total_tokens": 7040,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3968
+          },
+          "prompt_cache_hit_tokens": 3968,
+          "prompt_cache_miss_tokens": 3030
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--b344a6d9-4841-4add-bb8a-a02f75e5ac6e-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_RCCEx_EnablePLLI2S"
+          },
+          "id": "call_00_tzSA5fGHVJNDQ0j7gOFcZdMo",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 6998,
+        "output_tokens": 42,
+        "total_tokens": 7040,
+        "input_token_details": {
+          "cache_read": 3968
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_RCCEx_EnablePLLI2S', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1602, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_RCCEx_EnablePLLI2S', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1602, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_RCCEx_EnablePLLI2S', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1605, call_type='direct', ret_type='noReturnValue', start_line_content='    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_RCCEx_EnablePLLI2S', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1630, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_RCCEx_EnablePLLI2S', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1630, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_RCCEx_EnablePLLI2S', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', start_line=1633, call_type='direct', ret_type='noReturnValue', start_line_content='    if((HAL_GetTick() - tickstart ) > PLLI2S_TIMEOUT_VALUE)')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "770afe3e-786e-483c-af99-e2724fec3825",
+      "tool_call_id": "call_00_tzSA5fGHVJNDQ0j7gOFcZdMo",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the structure definition used in this function:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_gnryyJEiOjz02XuuMFZGR8px",
+            "function": {
+              "arguments": "{\"struct_name\": \"RCC_PLLI2SInitTypeDef\"}",
+              "name": "collect_struct_or_enum_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 39,
+          "prompt_tokens": 7806,
+          "total_tokens": 7845,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 6976
+          },
+          "prompt_cache_hit_tokens": 6976,
+          "prompt_cache_miss_tokens": 830
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--9aff9730-f27b-4b96-b176-7f9bc506d341-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "RCC_PLLI2SInitTypeDef"
+          },
+          "id": "call_00_gnryyJEiOjz02XuuMFZGR8px",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 7806,
+        "output_tokens": 39,
+        "total_tokens": 7845,
+        "input_token_details": {
+          "cache_read": 6976
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='RCC_PLLI2SInitTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_rcc_ex.h', location_line=75, struct_content='/**\\n* @brief  PLLI2S Clock structure definition\\n*/\\n{\\n  uint32_t PLLI2SN;    /*!< Specifies the multiplication factor for PLLI2S VCO output clock.\\n                            This parameter must be a number between Min_Data = 50 and Max_Data = 432.\\n                            This parameter will be used only when PLLI2S is selected as Clock Source I2S or SAI */\\n\\n  uint32_t PLLI2SR;    /*!< Specifies the division factor for I2S clock.\\n                            This parameter must be a number between Min_Data = 2 and Max_Data = 7.\\n                            This parameter will be used only when PLLI2S is selected as Clock Source I2S or SAI */\\n\\n  uint32_t PLLI2SQ;    /*!< Specifies the division factor for SAI1 clock.\\n                            This parameter must be a number between Min_Data = 2 and Max_Data = 15.\\n                            This parameter will be used only when PLLI2S is selected as Clock Source SAI */\\n\\n#if defined (STM32F745xx) || defined (STM32F746xx) || defined (STM32F756xx) || defined (STM32F765xx) || defined (STM32F767xx) || \\\\\\n    defined (STM32F769xx) || defined (STM32F777xx) || defined (STM32F779xx) || defined (STM32F750xx)\\n  uint32_t PLLI2SP;    /*!< Specifies the division factor for SPDIF-RX clock.\\n                            This parameter must be a value of @ref RCCEx_PLLI2SP_Clock_Divider.\\n                            This parameter will be used only when PLLI2S is selected as Clock Source SPDIF-RX */\\n#endif /* STM32F745xx || STM32F746xx || STM32F756xx || STM32F765xx || STM32F767xx || STM32F769xx || STM32F777xx || STM32F779xx || STM32F750xx */\\n}RCC_PLLI2SInitTypeDef;\\n', struct_content_in_lines={'75': '{', '76': '  uint32_t PLLI2SN;    /*!< Specifies the multiplication factor for PLLI2S VCO output clock.', '77': '                            This parameter must be a number between Min_Data = 50 and Max_Data = 432.', '78': '                            This parameter will be used only when PLLI2S is selected as Clock Source I2S or SAI */', '79': '', '80': '  uint32_t PLLI2SR;    /*!< Specifies the division factor for I2S clock.', '81': '                            This parameter must be a number between Min_Data = 2 and Max_Data = 7.', '82': '                            This parameter will be used only when PLLI2S is selected as Clock Source I2S or SAI */', '83': '', '84': '  uint32_t PLLI2SQ;    /*!< Specifies the division factor for SAI1 clock.', '85': '                            This parameter must be a number between Min_Data = 2 and Max_Data = 15.', '86': '                            This parameter will be used only when PLLI2S is selected as Clock Source SAI */', '87': '', '88': '#if defined (STM32F745xx) || defined (STM32F746xx) || defined (STM32F756xx) || defined (STM32F765xx) || defined (STM32F767xx) || \\\\', '89': '    defined (STM32F769xx) || defined (STM32F777xx) || defined (STM32F779xx) || defined (STM32F750xx)', '90': '  uint32_t PLLI2SP;    /*!< Specifies the division factor for SPDIF-RX clock.', '91': '                            This parameter must be a value of @ref RCCEx_PLLI2SP_Clock_Divider.', '92': '                            This parameter will be used only when PLLI2S is selected as Clock Source SPDIF-RX */', '93': '#endif /* STM32F745xx || STM32F746xx || STM32F756xx || STM32F765xx || STM32F767xx || STM32F769xx || STM32F777xx || STM32F779xx || STM32F750xx */', '94': '}RCC_PLLI2SInitTypeDef;'}, members={'PLLI2SN': '__sigset_t', 'PLLI2SR': '__useconds_t', 'PLLI2SQ': '__fd_mask', 'PLLI2SP': '__timer_t'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "7f92d2cc-54bd-46a4-850a-02bf7f919cce",
+      "tool_call_id": "call_00_gnryyJEiOjz02XuuMFZGR8px",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "## Analysis and Classification\n\nBased on my analysis of the function `HAL_RCCEx_EnablePLLI2S`, I can classify it as follows:\n\n**Classification: INIT (Initialization Function)**\n\n### Reasoning:\n\n1. **Function Purpose**: This function is responsible for enabling and configuring the PLLI2S (Phase-Locked Loop for I2S) peripheral on an STM32 microcontroller. It performs initialization and configuration of clock generation hardware.\n\n2. **Key Characteristics**:\n   - Performs peripheral initialization (PLLI2S enable/disable operations)\n   - Configures clock division factors and parameters\n   - Includes timeout handling for peripheral readiness\n   - Returns HAL status codes (HAL_OK, HAL_TIMEOUT)\n\n3. **MMIO Operations**: The function contains multiple MMIO operations including:\n   - `__HAL_RCC_PLLI2S_DISABLE()` and `__HAL_RCC_PLLI2S_ENABLE()` - peripheral control operations\n   - `__HAL_RCC_GET_FLAG(RCC_FLAG_PLLI2SRDY)` - status flag checking\n   - `__HAL_RCC_PLLI2S_CONFIG()` - configuration operations\n\n4. **Non-Driver Logic**: The function includes:\n   - Parameter validation using `assert_param`\n   - Timeout handling using `HAL_GetTick()`\n   - State machine logic (disable → wait → configure → enable → wait)\n\n5. **Category Justification**:\n   - **Not RECV**: No data transmission/reception operations\n   - **Not IRQ**: No interrupt handling or enable operations\n   - **INIT**: This is clearly an initialization function that sets up PLLI2S clock generation hardware\n   - The function follows a typical initialization pattern: disable peripheral, wait for ready state, configure parameters, enable peripheral, wait for ready state\n\nThis function should be treated as an INIT category function, where the peripheral register access operations should be removed while preserving the initialization logic and state machine flow.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 422,
+          "prompt_tokens": 9009,
+          "total_tokens": 9431,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 7808
+          },
+          "prompt_cache_hit_tokens": 7808,
+          "prompt_cache_miss_tokens": 1201
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--62eb8c15-7857-471e-917f-731e1e473c77-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9009,
+        "output_tokens": 422,
+        "total_tokens": 9431,
+        "input_token_details": {
+          "cache_read": 7808
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_RCCEx_EnablePLLI2S",
+    "function_type": "INIT",
+    "functionality": "Enable and configure the PLLI2S (Phase-Locked Loop for I2S) peripheral by disabling it first, waiting for it to be disabled, configuring the division factors, then enabling it and waiting for it to be ready",
+    "classification_reason": "This function performs peripheral initialization operations for PLLI2S clock generation hardware. It follows a typical initialization pattern: disable peripheral, wait for ready state, configure parameters, enable peripheral, wait for ready state. It includes parameter validation, timeout handling, and state machine logic but no data transmission/reception or interrupt operations.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

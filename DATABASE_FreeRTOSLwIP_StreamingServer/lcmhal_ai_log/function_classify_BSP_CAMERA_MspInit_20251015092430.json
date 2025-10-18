@@ -1,0 +1,278 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "dd695bd6-7d17-4e7c-9c45-e3983ddc740e"
+    },
+    {
+      "content": "Classify the function : BSP_CAMERA_MspInit",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "e0dc995c-5823-457d-a651-fad4434aa4cf",
+      "example": false
+    },
+    {
+      "content": "I'll analyze the function `BSP_CAMERA_MspInit` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_Qq77EqDMpSdFGYj7xLQdtZwe",
+            "function": {
+              "arguments": "{\"func_name\": \"BSP_CAMERA_MspInit\"}",
+              "name": "collect_function_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 56,
+          "prompt_tokens": 1673,
+          "total_tokens": 1729,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 9
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--0c92519b-5dc4-4f64-bba3-f1337428ea7a-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "BSP_CAMERA_MspInit"
+          },
+          "id": "call_00_Qq77EqDMpSdFGYj7xLQdtZwe",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1673,
+        "output_tokens": 56,
+        "total_tokens": 1729,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', location_line=453, function_content='/**\\n* @brief  Initializes the DCMI MSP.\\n* @param  hdcmi: HDMI handle\\n* @param  Params : pointer on additional configuration parameters, can be NULL.\\n*/\\n__weak void BSP_CAMERA_MspInit(DCMI_HandleTypeDef *hdcmi, void *Params)\\n{\\n  static DMA_HandleTypeDef hdma_eval;\\n  GPIO_InitTypeDef gpio_init_structure;\\n\\n  /*** Enable peripherals and GPIO clocks ***/\\n  /* Enable DCMI clock */\\n  __HAL_RCC_DCMI_CLK_ENABLE();\\n\\n  /* Enable DMA2 clock */\\n  __HAL_RCC_DMA2_CLK_ENABLE();\\n\\n  /* Enable GPIO clocks */\\n  __HAL_RCC_GPIOA_CLK_ENABLE();\\n  __HAL_RCC_GPIOB_CLK_ENABLE();\\n  __HAL_RCC_GPIOC_CLK_ENABLE();\\n  __HAL_RCC_GPIOD_CLK_ENABLE();\\n  __HAL_RCC_GPIOE_CLK_ENABLE();\\n\\n  /*** Configure the GPIO ***/\\n  /* Configure DCMI GPIO as alternate function */\\n  gpio_init_structure.Pin       = GPIO_PIN_4 | GPIO_PIN_6;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOA, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_7;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOB, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8  |\\\\\\n                                  GPIO_PIN_9 | GPIO_PIN_11;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOC, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_3 | GPIO_PIN_6;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOD, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_5 | GPIO_PIN_6;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOE, &gpio_init_structure);\\n\\n  /*** Configure the DMA ***/\\n  /* Set the parameters to be configured */\\n  hdma_eval.Init.Channel             = DMA_CHANNEL_1;\\n  hdma_eval.Init.Direction           = DMA_PERIPH_TO_MEMORY;\\n  hdma_eval.Init.PeriphInc           = DMA_PINC_DISABLE;\\n  hdma_eval.Init.MemInc              = DMA_MINC_ENABLE;\\n  hdma_eval.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;\\n  hdma_eval.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;\\n  hdma_eval.Init.Mode                = DMA_CIRCULAR;\\n  hdma_eval.Init.Priority            = DMA_PRIORITY_HIGH;\\n  hdma_eval.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;\\n  hdma_eval.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;\\n  hdma_eval.Init.MemBurst            = DMA_MBURST_SINGLE;\\n  hdma_eval.Init.PeriphBurst         = DMA_PBURST_SINGLE;\\n\\n  hdma_eval.Instance = DMA2_Stream1;\\n\\n  /* Associate the initialized DMA handle to the DCMI handle */\\n  __HAL_LINKDMA(hdcmi, DMA_Handle, hdma_eval);\\n\\n  /*** Configure the NVIC for DCMI and DMA ***/\\n  /* NVIC configuration for DCMI transfer complete interrupt */\\n  HAL_NVIC_SetPriority(DCMI_IRQn, 0x07, 0);\\n  HAL_NVIC_EnableIRQ(DCMI_IRQn);\\n\\n  /* NVIC configuration for DMA2D transfer complete interrupt */\\n  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0x07, 0);\\n  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);\\n\\n  /* Configure the DMA stream */\\n  HAL_DMA_Init(hdcmi->DMA_Handle);\\n}\\n', function_content_in_lines={'453': '__weak void BSP_CAMERA_MspInit(DCMI_HandleTypeDef *hdcmi, void *Params)', '454': '{', '455': '  static DMA_HandleTypeDef hdma_eval;', '456': '  GPIO_InitTypeDef gpio_init_structure;', '457': '', '458': '  /*** Enable peripherals and GPIO clocks ***/', '459': '  /* Enable DCMI clock */', '460': '  __HAL_RCC_DCMI_CLK_ENABLE();', '461': '', '462': '  /* Enable DMA2 clock */', '463': '  __HAL_RCC_DMA2_CLK_ENABLE();', '464': '', '465': '  /* Enable GPIO clocks */', '466': '  __HAL_RCC_GPIOA_CLK_ENABLE();', '467': '  __HAL_RCC_GPIOB_CLK_ENABLE();', '468': '  __HAL_RCC_GPIOC_CLK_ENABLE();', '469': '  __HAL_RCC_GPIOD_CLK_ENABLE();', '470': '  __HAL_RCC_GPIOE_CLK_ENABLE();', '471': '', '472': '  /*** Configure the GPIO ***/', '473': '  /* Configure DCMI GPIO as alternate function */', '474': '  gpio_init_structure.Pin       = GPIO_PIN_4 | GPIO_PIN_6;', '475': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '476': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '477': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '478': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '479': '  HAL_GPIO_Init(GPIOA, &gpio_init_structure);', '480': '', '481': '  gpio_init_structure.Pin       = GPIO_PIN_7;', '482': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '483': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '484': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '485': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '486': '  HAL_GPIO_Init(GPIOB, &gpio_init_structure);', '487': '', '488': '  gpio_init_structure.Pin       = GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8  |\\\\', '489': '                                  GPIO_PIN_9 | GPIO_PIN_11;', '490': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '491': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '492': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '493': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '494': '  HAL_GPIO_Init(GPIOC, &gpio_init_structure);', '495': '', '496': '  gpio_init_structure.Pin       = GPIO_PIN_3 | GPIO_PIN_6;', '497': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '498': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '499': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '500': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '501': '  HAL_GPIO_Init(GPIOD, &gpio_init_structure);', '502': '', '503': '  gpio_init_structure.Pin       = GPIO_PIN_5 | GPIO_PIN_6;', '504': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '505': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '506': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '507': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '508': '  HAL_GPIO_Init(GPIOE, &gpio_init_structure);', '509': '', '510': '  /*** Configure the DMA ***/', '511': '  /* Set the parameters to be configured */', '512': '  hdma_eval.Init.Channel             = DMA_CHANNEL_1;', '513': '  hdma_eval.Init.Direction           = DMA_PERIPH_TO_MEMORY;', '514': '  hdma_eval.Init.PeriphInc           = DMA_PINC_DISABLE;', '515': '  hdma_eval.Init.MemInc              = DMA_MINC_ENABLE;', '516': '  hdma_eval.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;', '517': '  hdma_eval.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;', '518': '  hdma_eval.Init.Mode                = DMA_CIRCULAR;', '519': '  hdma_eval.Init.Priority            = DMA_PRIORITY_HIGH;', '520': '  hdma_eval.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;', '521': '  hdma_eval.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;', '522': '  hdma_eval.Init.MemBurst            = DMA_MBURST_SINGLE;', '523': '  hdma_eval.Init.PeriphBurst         = DMA_PBURST_SINGLE;', '524': '', '525': '  hdma_eval.Instance = DMA2_Stream1;', '526': '', '527': '  /* Associate the initialized DMA handle to the DCMI handle */', '528': '  __HAL_LINKDMA(hdcmi, DMA_Handle, hdma_eval);', '529': '', '530': '  /*** Configure the NVIC for DCMI and DMA ***/', '531': '  /* NVIC configuration for DCMI transfer complete interrupt */', '532': '  HAL_NVIC_SetPriority(DCMI_IRQn, 0x07, 0);', '533': '  HAL_NVIC_EnableIRQ(DCMI_IRQn);', '534': '', '535': '  /* NVIC configuration for DMA2D transfer complete interrupt */', '536': '  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0x07, 0);', '537': '  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);', '538': '', '539': '  /* Configure the DMA stream */', '540': '  HAL_DMA_Init(hdcmi->DMA_Handle);', '541': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "10ce3da2-57ea-4009-b255-89e99f5b0dbc",
+      "tool_call_id": "call_00_Qq77EqDMpSdFGYj7xLQdtZwe",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_ieCvtJORoUs0Gt5Dy6j20Rmc",
+            "function": {
+              "arguments": "{\"func_name\": \"BSP_CAMERA_MspInit\"}",
+              "name": "collect_mmio_func_info"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 4910,
+          "total_tokens": 4954,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1664
+          },
+          "prompt_cache_hit_tokens": 1664,
+          "prompt_cache_miss_tokens": 3246
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--d422ee8b-59dd-4365-9629-c9f67f76d8f7-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "BSP_CAMERA_MspInit"
+          },
+          "id": "call_00_ieCvtJORoUs0Gt5Dy6j20Rmc",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4910,
+        "output_tokens": 44,
+        "total_tokens": 4954,
+        "input_token_details": {
+          "cache_read": 1664
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', location_line=453, function_content='/**\\n* @brief  Initializes the DCMI MSP.\\n* @param  hdcmi: HDMI handle\\n* @param  Params : pointer on additional configuration parameters, can be NULL.\\n*/\\n__weak void BSP_CAMERA_MspInit(DCMI_HandleTypeDef *hdcmi, void *Params)\\n{\\n  static DMA_HandleTypeDef hdma_eval;\\n  GPIO_InitTypeDef gpio_init_structure;\\n\\n  /*** Enable peripherals and GPIO clocks ***/\\n  /* Enable DCMI clock */\\n  __HAL_RCC_DCMI_CLK_ENABLE();\\n\\n  /* Enable DMA2 clock */\\n  __HAL_RCC_DMA2_CLK_ENABLE();\\n\\n  /* Enable GPIO clocks */\\n  __HAL_RCC_GPIOA_CLK_ENABLE();\\n  __HAL_RCC_GPIOB_CLK_ENABLE();\\n  __HAL_RCC_GPIOC_CLK_ENABLE();\\n  __HAL_RCC_GPIOD_CLK_ENABLE();\\n  __HAL_RCC_GPIOE_CLK_ENABLE();\\n\\n  /*** Configure the GPIO ***/\\n  /* Configure DCMI GPIO as alternate function */\\n  gpio_init_structure.Pin       = GPIO_PIN_4 | GPIO_PIN_6;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOA, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_7;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOB, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8  |\\\\\\n                                  GPIO_PIN_9 | GPIO_PIN_11;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOC, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_3 | GPIO_PIN_6;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOD, &gpio_init_structure);\\n\\n  gpio_init_structure.Pin       = GPIO_PIN_5 | GPIO_PIN_6;\\n  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Pull      = GPIO_PULLUP;\\n  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;\\n  gpio_init_structure.Alternate = GPIO_AF13_DCMI;\\n  HAL_GPIO_Init(GPIOE, &gpio_init_structure);\\n\\n  /*** Configure the DMA ***/\\n  /* Set the parameters to be configured */\\n  hdma_eval.Init.Channel             = DMA_CHANNEL_1;\\n  hdma_eval.Init.Direction           = DMA_PERIPH_TO_MEMORY;\\n  hdma_eval.Init.PeriphInc           = DMA_PINC_DISABLE;\\n  hdma_eval.Init.MemInc              = DMA_MINC_ENABLE;\\n  hdma_eval.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;\\n  hdma_eval.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;\\n  hdma_eval.Init.Mode                = DMA_CIRCULAR;\\n  hdma_eval.Init.Priority            = DMA_PRIORITY_HIGH;\\n  hdma_eval.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;\\n  hdma_eval.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;\\n  hdma_eval.Init.MemBurst            = DMA_MBURST_SINGLE;\\n  hdma_eval.Init.PeriphBurst         = DMA_PBURST_SINGLE;\\n\\n  hdma_eval.Instance = DMA2_Stream1;\\n\\n  /* Associate the initialized DMA handle to the DCMI handle */\\n  __HAL_LINKDMA(hdcmi, DMA_Handle, hdma_eval);\\n\\n  /*** Configure the NVIC for DCMI and DMA ***/\\n  /* NVIC configuration for DCMI transfer complete interrupt */\\n  HAL_NVIC_SetPriority(DCMI_IRQn, 0x07, 0);\\n  HAL_NVIC_EnableIRQ(DCMI_IRQn);\\n\\n  /* NVIC configuration for DMA2D transfer complete interrupt */\\n  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0x07, 0);\\n  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);\\n\\n  /* Configure the DMA stream */\\n  HAL_DMA_Init(hdcmi->DMA_Handle);\\n}\\n', function_content_in_lines={'453': '__weak void BSP_CAMERA_MspInit(DCMI_HandleTypeDef *hdcmi, void *Params)', '454': '{', '455': '  static DMA_HandleTypeDef hdma_eval;', '456': '  GPIO_InitTypeDef gpio_init_structure;', '457': '', '458': '  /*** Enable peripherals and GPIO clocks ***/', '459': '  /* Enable DCMI clock */', '460': '  __HAL_RCC_DCMI_CLK_ENABLE();', '461': '', '462': '  /* Enable DMA2 clock */', '463': '  __HAL_RCC_DMA2_CLK_ENABLE();', '464': '', '465': '  /* Enable GPIO clocks */', '466': '  __HAL_RCC_GPIOA_CLK_ENABLE();', '467': '  __HAL_RCC_GPIOB_CLK_ENABLE();', '468': '  __HAL_RCC_GPIOC_CLK_ENABLE();', '469': '  __HAL_RCC_GPIOD_CLK_ENABLE();', '470': '  __HAL_RCC_GPIOE_CLK_ENABLE();', '471': '', '472': '  /*** Configure the GPIO ***/', '473': '  /* Configure DCMI GPIO as alternate function */', '474': '  gpio_init_structure.Pin       = GPIO_PIN_4 | GPIO_PIN_6;', '475': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '476': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '477': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '478': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '479': '  HAL_GPIO_Init(GPIOA, &gpio_init_structure);', '480': '', '481': '  gpio_init_structure.Pin       = GPIO_PIN_7;', '482': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '483': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '484': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '485': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '486': '  HAL_GPIO_Init(GPIOB, &gpio_init_structure);', '487': '', '488': '  gpio_init_structure.Pin       = GPIO_PIN_6 | GPIO_PIN_7  | GPIO_PIN_8  |\\\\', '489': '                                  GPIO_PIN_9 | GPIO_PIN_11;', '490': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '491': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '492': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '493': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '494': '  HAL_GPIO_Init(GPIOC, &gpio_init_structure);', '495': '', '496': '  gpio_init_structure.Pin       = GPIO_PIN_3 | GPIO_PIN_6;', '497': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '498': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '499': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '500': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '501': '  HAL_GPIO_Init(GPIOD, &gpio_init_structure);', '502': '', '503': '  gpio_init_structure.Pin       = GPIO_PIN_5 | GPIO_PIN_6;', '504': '  gpio_init_structure.Mode      = GPIO_MODE_AF_PP;', '505': '  gpio_init_structure.Pull      = GPIO_PULLUP;', '506': '  gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;', '507': '  gpio_init_structure.Alternate = GPIO_AF13_DCMI;', '508': '  HAL_GPIO_Init(GPIOE, &gpio_init_structure);', '509': '', '510': '  /*** Configure the DMA ***/', '511': '  /* Set the parameters to be configured */', '512': '  hdma_eval.Init.Channel             = DMA_CHANNEL_1;', '513': '  hdma_eval.Init.Direction           = DMA_PERIPH_TO_MEMORY;', '514': '  hdma_eval.Init.PeriphInc           = DMA_PINC_DISABLE;', '515': '  hdma_eval.Init.MemInc              = DMA_MINC_ENABLE;', '516': '  hdma_eval.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;', '517': '  hdma_eval.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;', '518': '  hdma_eval.Init.Mode                = DMA_CIRCULAR;', '519': '  hdma_eval.Init.Priority            = DMA_PRIORITY_HIGH;', '520': '  hdma_eval.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;', '521': '  hdma_eval.Init.FIFOThreshold       = DMA_FIFO_THRESHOLD_FULL;', '522': '  hdma_eval.Init.MemBurst            = DMA_MBURST_SINGLE;', '523': '  hdma_eval.Init.PeriphBurst         = DMA_PBURST_SINGLE;', '524': '', '525': '  hdma_eval.Instance = DMA2_Stream1;', '526': '', '527': '  /* Associate the initialized DMA handle to the DCMI handle */', '528': '  __HAL_LINKDMA(hdcmi, DMA_Handle, hdma_eval);', '529': '', '530': '  /*** Configure the NVIC for DCMI and DMA ***/', '531': '  /* NVIC configuration for DCMI transfer complete interrupt */', '532': '  HAL_NVIC_SetPriority(DCMI_IRQn, 0x07, 0);', '533': '  HAL_NVIC_EnableIRQ(DCMI_IRQn);', '534': '', '535': '  /* NVIC configuration for DMA2D transfer complete interrupt */', '536': '  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0x07, 0);', '537': '  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);', '538': '', '539': '  /* Configure the DMA stream */', '540': '  HAL_DMA_Init(hdcmi->DMA_Handle);', '541': '}'})\nMMIO Exprs info: [MmioExprInfo(name='Direction', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=513, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=460, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=463, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=466, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=467, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=468, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=469, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=470, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=475, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=482, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=490, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=497, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=504, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=518, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Priority', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=519, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=478, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=485, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=493, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=500, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=507, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=477, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=484, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=492, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=499, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=506, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=476, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=483, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=491, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=498, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=505, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=474, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=481, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=488, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=496, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=503, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='PeriphBurst', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=523, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='MemBurst', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=522, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='FIFOThreshold', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=521, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='FIFOMode', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=520, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='MemDataAlignment', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=517, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='PeriphDataAlignment', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=516, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='MemInc', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=515, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='PeriphInc', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=514, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Channel', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=512, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=460, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=463, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=466, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=467, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=468, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=469, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=470, expr_type='binary', enclosing_type='assign_to')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "8d679cc4-cd61-4e44-b39b-5bba466e095c",
+      "tool_call_id": "call_00_ieCvtJORoUs0Gt5Dy6j20Rmc",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "tool_calls": [
+          {
+            "id": "call_00_Zryfpu4yDiFhVv65SbXOdPmS",
+            "function": {
+              "arguments": "{\"func_name\": \"BSP_CAMERA_MspInit\"}",
+              "name": "collect_func_call_stack"
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 38,
+          "prompt_tokens": 11650,
+          "total_tokens": 11688,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4928
+          },
+          "prompt_cache_hit_tokens": 4928,
+          "prompt_cache_miss_tokens": 6722
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--9accecca-e8ce-48ff-9108-71395e88b24f-0",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "BSP_CAMERA_MspInit"
+          },
+          "id": "call_00_Zryfpu4yDiFhVv65SbXOdPmS",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 11650,
+        "output_tokens": 38,
+        "total_tokens": 11688,
+        "input_token_details": {
+          "cache_read": 4928
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=479, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOA, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=486, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOB, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=494, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOC, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=501, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOD, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=508, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_GPIO_Init(GPIOE, &gpio_init_structure);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_DMA_Init', call_tag='call to HAL_DMA_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=540, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_DMA_Init(hdcmi->DMA_Handle);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_NVIC_EnableIRQ', call_tag='call to HAL_NVIC_EnableIRQ', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=533, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_NVIC_EnableIRQ(DCMI_IRQn);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_NVIC_EnableIRQ', call_tag='call to HAL_NVIC_EnableIRQ', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=537, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_NVIC_SetPriority', call_tag='call to HAL_NVIC_SetPriority', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=532, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_NVIC_SetPriority(DCMI_IRQn, 0x07, 0);'), FunctionCallInfo(caller_name='BSP_CAMERA_MspInit', callee_name='HAL_NVIC_SetPriority', call_tag='call to HAL_NVIC_SetPriority', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=536, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0x07, 0);')]\nFunction call from info: [FunctionCallInfo(caller_name='BSP_CAMERA_Init', callee_name='BSP_CAMERA_MspInit', call_tag='call to BSP_CAMERA_MspInit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', start_line=212, call_type='direct', ret_type='noReturnValue', start_line_content='    BSP_CAMERA_MspInit(&hDcmiEval, NULL);')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "c52a4c8d-3ff7-48ae-b12b-402ab619db03",
+      "tool_call_id": "call_00_Zryfpu4yDiFhVv65SbXOdPmS",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `BSP_CAMERA_MspInit`, I can now classify it according to the specified categories.\n\n## Function Classification: **INIT**\n\n### Reasoning:\n\n1. **Function Purpose**: The function `BSP_CAMERA_MspInit` is clearly an initialization function as indicated by:\n   - The function name contains \"MspInit\" (MSP = MCU Specific Package initialization)\n   - The comment states: \"Initializes the DCMI MSP\"\n   - It's called from `BSP_CAMERA_Init` as part of the camera initialization sequence\n\n2. **Function Content Analysis**:\n   - **Clock Enable Operations**: Enables clocks for DCMI, DMA2, and multiple GPIO ports (GPIOA-E)\n   - **GPIO Configuration**: Configures multiple GPIO pins as alternate function for DCMI interface\n   - **DMA Configuration**: Sets up DMA parameters for peripheral-to-memory transfer with circular mode\n   - **Interrupt Configuration**: Configures NVIC priorities and enables interrupts for DCMI and DMA\n   - **DMA Initialization**: Calls `HAL_DMA_Init` to initialize the DMA stream\n\n3. **Key Characteristics**:\n   - This is a pure initialization function that sets up hardware resources\n   - It performs peripheral register access through MMIO operations (clock enables, GPIO configuration)\n   - It contains interrupt enable operations (`HAL_NVIC_EnableIRQ`)\n   - It does NOT perform data transmission/reception (not RECV type)\n   - It's not an interrupt handler itself (not IRQ type)\n\n4. **Replacement Strategy**:\n   - As an INIT category function, the strategy should be to remove MMIO/register access operations while preserving initialization logic for structures\n   - The DMA handle configuration and structure setup should be preserved\n   - The interrupt configuration (priority settings) should be preserved as they represent program state\n   - The actual hardware register writes (clock enables, GPIO init) should be removed\n\nThe function is primarily responsible for setting up the camera interface hardware resources and represents a typical MCU-specific peripheral initialization routine.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 444,
+          "prompt_tokens": 12960,
+          "total_tokens": 13404,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11648
+          },
+          "prompt_cache_hit_tokens": 11648,
+          "prompt_cache_miss_tokens": 1312
+        },
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--1a9f8a77-07be-4461-a865-a6c79694237c-0",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12960,
+        "output_tokens": 444,
+        "total_tokens": 13404,
+        "input_token_details": {
+          "cache_read": 11648
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "BSP_CAMERA_MspInit",
+    "function_type": "INIT",
+    "functionality": "Initializes the DCMI (Digital Camera Interface) MSP (MCU Specific Package) by enabling clocks, configuring GPIO pins for DCMI alternate function, setting up DMA for peripheral-to-memory transfer, and configuring interrupts for DCMI and DMA",
+    "classification_reason": "This is a pure initialization function that sets up hardware resources for camera interface. It performs clock enable operations, GPIO configuration, DMA setup, and interrupt configuration. The function contains peripheral register access through MMIO operations but does not perform data transmission/reception or serve as an interrupt handler. It's called from BSP_CAMERA_Init as part of camera initialization sequence.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}
