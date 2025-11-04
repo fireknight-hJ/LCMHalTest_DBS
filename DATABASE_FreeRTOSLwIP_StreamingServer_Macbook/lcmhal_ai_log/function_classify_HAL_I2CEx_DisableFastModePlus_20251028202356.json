@@ -1,0 +1,368 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "58708fcc-b95c-4a9f-acb7-bff9cdb3465b"
+    },
+    {
+      "content": "Classify the function : HAL_I2CEx_DisableFastModePlus",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "c2f33348-7cdf-4be2-a8ef-b76e9e9e6c5d"
+    },
+    {
+      "content": "I'll analyze the function `HAL_I2CEx_DisableFastModePlus` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 64,
+          "prompt_tokens": 1748,
+          "total_tokens": 1812,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 20
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "ac45793c-df74-4caf-809b-489d518abd3f",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--749340ae-003d-4178-9b15-e814faac1a9d-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_I2CEx_DisableFastModePlus"
+          },
+          "id": "call_00_UwukTwFwnGzy5AoNs4oOTLxN",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1748,
+        "output_tokens": 64,
+        "total_tokens": 1812,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2CEx_DisableFastModePlus', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c_ex.c', location_line=244, function_content='/**\\n* @brief Disable the I2C fast mode plus driving capability.\\n* @param ConfigFastModePlus Selects the pin.\\n*   This parameter can be one of the @ref I2CEx_FastModePlus values\\n* @note  For I2C1, fast mode plus driving capability can be disabled on all selected\\n*        I2C1 pins using I2C_FASTMODEPLUS_I2C1 parameter or independently\\n*        on each one of the following pins PB6, PB7, PB8 and PB9.\\n* @note  For remaining I2C1 pins (PA14, PA15...) fast mode plus driving capability\\n*        can be disabled only by using I2C_FASTMODEPLUS_I2C1 parameter.\\n* @note  For all I2C2 pins fast mode plus driving capability can be disabled\\n*        only by using I2C_FASTMODEPLUS_I2C2 parameter.\\n* @note  For all I2C3 pins fast mode plus driving capability can be disabled\\n*        only by using I2C_FASTMODEPLUS_I2C3 parameter.\\n* @note  For all I2C4 pins fast mode plus driving capability can be disabled\\n*        only by using I2C_FASTMODEPLUS_I2C4 parameter.\\n* @retval None\\n*/\\nvoid HAL_I2CEx_DisableFastModePlus(uint32_t ConfigFastModePlus)\\n{\\n  /* Check the parameter */\\n  assert_param(IS_I2C_FASTMODEPLUS(ConfigFastModePlus));\\n\\n  /* Enable SYSCFG clock */\\n  __HAL_RCC_SYSCFG_CLK_ENABLE();\\n\\n  /* Disable fast mode plus driving capability for selected pin */\\n  CLEAR_BIT(SYSCFG->PMC, (uint32_t)ConfigFastModePlus);\\n}\\n', function_content_in_lines={'244': 'void HAL_I2CEx_DisableFastModePlus(uint32_t ConfigFastModePlus)', '245': '{', '246': '  /* Check the parameter */', '247': '  assert_param(IS_I2C_FASTMODEPLUS(ConfigFastModePlus));', '248': '', '249': '  /* Enable SYSCFG clock */', '250': '  __HAL_RCC_SYSCFG_CLK_ENABLE();', '251': '', '252': '  /* Disable fast mode plus driving capability for selected pin */', '253': '  CLEAR_BIT(SYSCFG->PMC, (uint32_t)ConfigFastModePlus);', '254': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "b092ee97-52cb-4499-bfc3-45e0b2878252",
+      "tool_call_id": "call_00_UwukTwFwnGzy5AoNs4oOTLxN",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 48,
+          "prompt_tokens": 2486,
+          "total_tokens": 2534,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1792
+          },
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 694
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "3afdda23-902f-4270-a58a-7bfe7e6feb6a",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--60c9c55b-59f6-4f2a-9345-fd5e09c52f83-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_I2CEx_DisableFastModePlus"
+          },
+          "id": "call_00_G98QvVqiRPX6xsNjY8crqUkH",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2486,
+        "output_tokens": 48,
+        "total_tokens": 2534,
+        "input_token_details": {
+          "cache_read": 1792
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2CEx_DisableFastModePlus', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c_ex.c', location_line=244, function_content='/**\\n* @brief Disable the I2C fast mode plus driving capability.\\n* @param ConfigFastModePlus Selects the pin.\\n*   This parameter can be one of the @ref I2CEx_FastModePlus values\\n* @note  For I2C1, fast mode plus driving capability can be disabled on all selected\\n*        I2C1 pins using I2C_FASTMODEPLUS_I2C1 parameter or independently\\n*        on each one of the following pins PB6, PB7, PB8 and PB9.\\n* @note  For remaining I2C1 pins (PA14, PA15...) fast mode plus driving capability\\n*        can be disabled only by using I2C_FASTMODEPLUS_I2C1 parameter.\\n* @note  For all I2C2 pins fast mode plus driving capability can be disabled\\n*        only by using I2C_FASTMODEPLUS_I2C2 parameter.\\n* @note  For all I2C3 pins fast mode plus driving capability can be disabled\\n*        only by using I2C_FASTMODEPLUS_I2C3 parameter.\\n* @note  For all I2C4 pins fast mode plus driving capability can be disabled\\n*        only by using I2C_FASTMODEPLUS_I2C4 parameter.\\n* @retval None\\n*/\\nvoid HAL_I2CEx_DisableFastModePlus(uint32_t ConfigFastModePlus)\\n{\\n  /* Check the parameter */\\n  assert_param(IS_I2C_FASTMODEPLUS(ConfigFastModePlus));\\n\\n  /* Enable SYSCFG clock */\\n  __HAL_RCC_SYSCFG_CLK_ENABLE();\\n\\n  /* Disable fast mode plus driving capability for selected pin */\\n  CLEAR_BIT(SYSCFG->PMC, (uint32_t)ConfigFastModePlus);\\n}\\n', function_content_in_lines={'244': 'void HAL_I2CEx_DisableFastModePlus(uint32_t ConfigFastModePlus)', '245': '{', '246': '  /* Check the parameter */', '247': '  assert_param(IS_I2C_FASTMODEPLUS(ConfigFastModePlus));', '248': '', '249': '  /* Enable SYSCFG clock */', '250': '  __HAL_RCC_SYSCFG_CLK_ENABLE();', '251': '', '252': '  /* Disable fast mode plus driving capability for selected pin */', '253': '  CLEAR_BIT(SYSCFG->PMC, (uint32_t)ConfigFastModePlus);', '254': '}'})\nMMIO Exprs info: [MmioExprInfo(name='tmpreg', function='HAL_I2CEx_DisableFastModePlus', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c_ex.c', start_line=250, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='... & ...', function='HAL_I2CEx_DisableFastModePlus', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c_ex.c', start_line=250, expr_type='binary', enclosing_type='assign_to')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "b8dd1564-bbe1-42f7-bd45-6fcc68233712",
+      "tool_call_id": "call_00_G98QvVqiRPX6xsNjY8crqUkH",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 42,
+          "prompt_tokens": 3397,
+          "total_tokens": 3439,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2496
+          },
+          "prompt_cache_hit_tokens": 2496,
+          "prompt_cache_miss_tokens": 901
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "7f03c2cf-84da-420c-bdc8-00d4edc842b2",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--8b8edd80-58ac-46aa-a3f8-a62acdbcce02-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_I2CEx_DisableFastModePlus"
+          },
+          "id": "call_00_vaxtelE0OdoDDN8ttyCIYoEm",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3397,
+        "output_tokens": 42,
+        "total_tokens": 3439,
+        "input_token_details": {
+          "cache_read": 2496
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call not found: HAL_I2CEx_DisableFastModePlus",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "c91bf755-f08b-4575-84f6-7d074219895c",
+      "tool_call_id": "call_00_vaxtelE0OdoDDN8ttyCIYoEm",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me check if there are any related structures or enums used by this function:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 42,
+          "prompt_tokens": 3458,
+          "total_tokens": 3500,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3392
+          },
+          "prompt_cache_hit_tokens": 3392,
+          "prompt_cache_miss_tokens": 66
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "bd799c24-17fb-4789-978a-f048f2819aa3",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--ab01e9ee-4d98-41a4-b842-e6c24639f76f-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "I2CEx_FastModePlus"
+          },
+          "id": "call_00_3wMylVSFC1vYPHxlfZrcZhW4",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3458,
+        "output_tokens": 42,
+        "total_tokens": 3500,
+        "input_token_details": {
+          "cache_read": 3392
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct or enum not found: I2CEx_FastModePlus",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "106f384b-1ea6-43bc-8926-1f809660ab96",
+      "tool_call_id": "call_00_3wMylVSFC1vYPHxlfZrcZhW4",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me check for the SYSCFG structure:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 30,
+          "prompt_tokens": 3517,
+          "total_tokens": 3547,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3456
+          },
+          "prompt_cache_hit_tokens": 3456,
+          "prompt_cache_miss_tokens": 61
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "18ffa5d8-4281-4963-ad63-d32500931a09",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--0ab259ff-c29f-4a71-b845-a1419596607d-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "SYSCFG"
+          },
+          "id": "call_00_IEcaVfwCZQ4RxbjtLyHjU69M",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3517,
+        "output_tokens": 30,
+        "total_tokens": 3547,
+        "input_token_details": {
+          "cache_read": 3456
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct or enum not found: SYSCFG",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "5d009359-1cbd-4510-91a0-88273a16d6c5",
+      "tool_call_id": "call_00_IEcaVfwCZQ4RxbjtLyHjU69M",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `HAL_I2CEx_DisableFastModePlus`, here's my classification:\n\n## Function Classification: **RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function disables the I2C fast mode plus driving capability for selected pins. It's a configuration function that modifies peripheral settings but doesn't involve data transmission/reception.\n\n2. **Key Operations**:\n   - Parameter validation using `assert_param(IS_I2C_FASTMODEPLUS(ConfigFastModePlus))`\n   - Enabling SYSCFG clock via `__HAL_RCC_SYSCFG_CLK_ENABLE()`\n   - Clearing bits in the SYSCFG->PMC register using `CLEAR_BIT(SYSCFG->PMC, (uint32_t)ConfigFastModePlus)`\n\n3. **Category Analysis**:\n   - **NOT RECV**: No data transmission/reception operations\n   - **NOT IRQ**: No interrupt handling or enabling operations\n   - **NOT INIT**: While it performs configuration, it's disabling a feature rather than initializing\n   - **RETURNOK**: This function only performs driver/peripheral operations (register manipulation) and doesn't affect upper-layer data structures. It's a pure configuration function that can be safely replaced with a no-op or success status.\n\n4. **MMIO Operations**: The function performs MMIO operations (register writes) to disable fast mode plus capability, but these are peripheral configuration operations that don't affect the program's core logic or data structures.\n\n5. **Return Type**: The function returns `void`, so no return value needs to be preserved.\n\n**Conclusion**: This is a **RETURNOK** type function because it only performs driver-specific peripheral configuration operations without affecting upper-layer data structures or program logic. The function can be safely replaced with an empty implementation since it doesn't return any value and its operations are purely hardware-specific.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 399,
+          "prompt_tokens": 3559,
+          "total_tokens": 3958,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3520
+          },
+          "prompt_cache_hit_tokens": 3520,
+          "prompt_cache_miss_tokens": 39
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "cdf7a44d-b08c-485f-b725-efbecd8d2ccb",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--3f39bc9a-3976-4273-a937-9098a505d107-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3559,
+        "output_tokens": 399,
+        "total_tokens": 3958,
+        "input_token_details": {
+          "cache_read": 3520
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_I2CEx_DisableFastModePlus",
+    "function_type": "RETURNOK",
+    "functionality": "Disables the I2C fast mode plus driving capability for selected pins by clearing bits in the SYSCFG->PMC register",
+    "classification_reason": "This function performs only peripheral configuration operations (register manipulation) without data transmission/reception or interrupt handling. It doesn't affect upper-layer data structures and can be safely replaced with a no-op implementation since it returns void and its operations are purely hardware-specific.",
+    "has_replacement": true,
+    "function_replacement": "void HAL_I2CEx_DisableFastModePlus(uint32_t ConfigFastModePlus)\n{\n  /* Parameter validation */\n  assert_param(IS_I2C_FASTMODEPLUS(ConfigFastModePlus));\n  \n  /* Driver operation removed - fast mode plus disabling is hardware-specific */\n  /* Original operations:\n   * __HAL_RCC_SYSCFG_CLK_ENABLE();\n   * CLEAR_BIT(SYSCFG->PMC, (uint32_t)ConfigFastModePlus);\n   */\n}"
+  }
+}

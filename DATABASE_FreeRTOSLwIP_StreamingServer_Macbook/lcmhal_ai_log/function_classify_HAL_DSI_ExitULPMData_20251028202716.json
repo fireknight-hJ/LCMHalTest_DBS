@@ -1,0 +1,308 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "c5b9291e-ae2a-49da-9847-6ab72e8ca82f"
+    },
+    {
+      "content": "Classify the function : HAL_DSI_ExitULPMData",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "186748dc-771d-4ce0-9319-755d9daf80ea"
+    },
+    {
+      "content": "I'll analyze the function `HAL_DSI_ExitULPMData` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 60,
+          "prompt_tokens": 1746,
+          "total_tokens": 1806,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 18
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "584e490e-e53d-4180-b059-c102c07dcaa5",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--5f10d139-a177-4d06-9d80-64b3bc742857-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_DSI_ExitULPMData"
+          },
+          "id": "call_00_D7FO3aUdajDMelsSlr6SgljN",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1746,
+        "output_tokens": 60,
+        "total_tokens": 1806,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', location_line=2018, function_content='/**\\n* @brief  Exit the ULPM (Ultra Low Power Mode) with the D-PHY PLL running\\n*         (only data lanes are in ULPM)\\n* @param  hdsi  pointer to a DSI_HandleTypeDef structure that contains\\n*               the configuration information for the DSI.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_DSI_ExitULPMData(DSI_HandleTypeDef *hdsi)\\n{\\n  uint32_t tickstart;\\n\\n  /* Process locked */\\n  __HAL_LOCK(hdsi);\\n\\n  /* Verify that all active lanes are in ULPM */\\n  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)\\n  {\\n    if ((hdsi->Instance->PSR &  DSI_PSR_UAN0) != 0U)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_ERROR;\\n    }\\n  }\\n  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)\\n  {\\n    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  | DSI_PSR_UAN1)) != 0U)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_ERROR;\\n    }\\n  }\\n  else\\n  {\\n    /* Process unlocked */\\n    __HAL_UNLOCK(hdsi);\\n\\n    return HAL_ERROR;\\n  }\\n\\n  /* Turn on the DSI PLL */\\n  __HAL_DSI_PLL_ENABLE(hdsi);\\n\\n  /* Requires min of 400us delay before reading the PLLLS flag */\\n  /* 1ms delay is inserted that is the minimum HAL delay granularity */\\n  HAL_Delay(1);\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* Wait for the lock of the PLL */\\n  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)\\n  {\\n    /* Check for the Timeout */\\n    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n  /* Exit ULPS on Data Lanes */\\n  hdsi->Instance->PUCR |= DSI_PUCR_UEDL;\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* Wait until all active lanes exit ULPM */\\n  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)\\n  {\\n    while ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)\\n    {\\n      /* Check for the Timeout */\\n      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n      {\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hdsi);\\n\\n        return HAL_TIMEOUT;\\n      }\\n    }\\n  }\\n  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)\\n  {\\n    while ((hdsi->Instance->PSR & (DSI_PSR_UAN0 | DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))\\n    {\\n      /* Check for the Timeout */\\n      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n      {\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hdsi);\\n\\n        return HAL_TIMEOUT;\\n      }\\n    }\\n  }\\n  else\\n  {\\n    /* Process unlocked */\\n    __HAL_UNLOCK(hdsi);\\n\\n    return HAL_ERROR;\\n  }\\n\\n  /* wait for 1 ms*/\\n  HAL_Delay(1U);\\n\\n  /* De-assert the ULPM requests and the ULPM exit bits */\\n  hdsi->Instance->PUCR = 0U;\\n\\n  /* Verify that D-PHY PLL is enabled */\\n  if ((hdsi->Instance->WRPCR & DSI_WRPCR_PLLEN) != DSI_WRPCR_PLLEN)\\n  {\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hdsi);\\n    return HAL_ERROR;\\n  }\\n\\n  /* Verify that all active lanes are in Stop state */\\n  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)\\n  {\\n    if ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n      return HAL_ERROR;\\n    }\\n  }\\n  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)\\n  {\\n    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  |  DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n      return HAL_ERROR;\\n    }\\n  }\\n  else\\n  {\\n    /* Process unlocked */\\n    __HAL_UNLOCK(hdsi);\\n    return HAL_ERROR;\\n  }\\n\\n  /* Verify that D-PHY PLL is locked */\\n  /* Requires min of 400us delay before reading the PLLLS flag */\\n  /* 1ms delay is inserted that is the minimum HAL delay granularity */\\n  HAL_Delay(1);\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* Wait for the lock of the PLL */\\n  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)\\n  {\\n    /* Check for the Timeout */\\n    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n  /* Process unlocked */\\n  __HAL_UNLOCK(hdsi);\\n\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'2018': 'HAL_StatusTypeDef HAL_DSI_ExitULPMData(DSI_HandleTypeDef *hdsi)', '2019': '{', '2020': '  uint32_t tickstart;', '2021': '', '2022': '  /* Process locked */', '2023': '  __HAL_LOCK(hdsi);', '2024': '', '2025': '  /* Verify that all active lanes are in ULPM */', '2026': '  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)', '2027': '  {', '2028': '    if ((hdsi->Instance->PSR &  DSI_PSR_UAN0) != 0U)', '2029': '    {', '2030': '      /* Process Unlocked */', '2031': '      __HAL_UNLOCK(hdsi);', '2032': '', '2033': '      return HAL_ERROR;', '2034': '    }', '2035': '  }', '2036': '  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)', '2037': '  {', '2038': '    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  | DSI_PSR_UAN1)) != 0U)', '2039': '    {', '2040': '      /* Process Unlocked */', '2041': '      __HAL_UNLOCK(hdsi);', '2042': '', '2043': '      return HAL_ERROR;', '2044': '    }', '2045': '  }', '2046': '  else', '2047': '  {', '2048': '    /* Process unlocked */', '2049': '    __HAL_UNLOCK(hdsi);', '2050': '', '2051': '    return HAL_ERROR;', '2052': '  }', '2053': '', '2054': '  /* Turn on the DSI PLL */', '2055': '  __HAL_DSI_PLL_ENABLE(hdsi);', '2056': '', '2057': '  /* Requires min of 400us delay before reading the PLLLS flag */', '2058': '  /* 1ms delay is inserted that is the minimum HAL delay granularity */', '2059': '  HAL_Delay(1);', '2060': '', '2061': '  /* Get tick */', '2062': '  tickstart = HAL_GetTick();', '2063': '', '2064': '  /* Wait for the lock of the PLL */', '2065': '  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)', '2066': '  {', '2067': '    /* Check for the Timeout */', '2068': '    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2069': '    {', '2070': '      /* Process Unlocked */', '2071': '      __HAL_UNLOCK(hdsi);', '2072': '', '2073': '      return HAL_TIMEOUT;', '2074': '    }', '2075': '  }', '2076': '', '2077': '  /* Exit ULPS on Data Lanes */', '2078': '  hdsi->Instance->PUCR |= DSI_PUCR_UEDL;', '2079': '', '2080': '  /* Get tick */', '2081': '  tickstart = HAL_GetTick();', '2082': '', '2083': '  /* Wait until all active lanes exit ULPM */', '2084': '  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)', '2085': '  {', '2086': '    while ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)', '2087': '    {', '2088': '      /* Check for the Timeout */', '2089': '      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2090': '      {', '2091': '        /* Process Unlocked */', '2092': '        __HAL_UNLOCK(hdsi);', '2093': '', '2094': '        return HAL_TIMEOUT;', '2095': '      }', '2096': '    }', '2097': '  }', '2098': '  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)', '2099': '  {', '2100': '    while ((hdsi->Instance->PSR & (DSI_PSR_UAN0 | DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))', '2101': '    {', '2102': '      /* Check for the Timeout */', '2103': '      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2104': '      {', '2105': '        /* Process Unlocked */', '2106': '        __HAL_UNLOCK(hdsi);', '2107': '', '2108': '        return HAL_TIMEOUT;', '2109': '      }', '2110': '    }', '2111': '  }', '2112': '  else', '2113': '  {', '2114': '    /* Process unlocked */', '2115': '    __HAL_UNLOCK(hdsi);', '2116': '', '2117': '    return HAL_ERROR;', '2118': '  }', '2119': '', '2120': '  /* wait for 1 ms*/', '2121': '  HAL_Delay(1U);', '2122': '', '2123': '  /* De-assert the ULPM requests and the ULPM exit bits */', '2124': '  hdsi->Instance->PUCR = 0U;', '2125': '', '2126': '  /* Verify that D-PHY PLL is enabled */', '2127': '  if ((hdsi->Instance->WRPCR & DSI_WRPCR_PLLEN) != DSI_WRPCR_PLLEN)', '2128': '  {', '2129': '    /* Process Unlocked */', '2130': '    __HAL_UNLOCK(hdsi);', '2131': '    return HAL_ERROR;', '2132': '  }', '2133': '', '2134': '  /* Verify that all active lanes are in Stop state */', '2135': '  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)', '2136': '  {', '2137': '    if ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)', '2138': '    {', '2139': '      /* Process Unlocked */', '2140': '      __HAL_UNLOCK(hdsi);', '2141': '      return HAL_ERROR;', '2142': '    }', '2143': '  }', '2144': '  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)', '2145': '  {', '2146': '    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  |  DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))', '2147': '    {', '2148': '      /* Process Unlocked */', '2149': '      __HAL_UNLOCK(hdsi);', '2150': '      return HAL_ERROR;', '2151': '    }', '2152': '  }', '2153': '  else', '2154': '  {', '2155': '    /* Process unlocked */', '2156': '    __HAL_UNLOCK(hdsi);', '2157': '    return HAL_ERROR;', '2158': '  }', '2159': '', '2160': '  /* Verify that D-PHY PLL is locked */', '2161': '  /* Requires min of 400us delay before reading the PLLLS flag */', '2162': '  /* 1ms delay is inserted that is the minimum HAL delay granularity */', '2163': '  HAL_Delay(1);', '2164': '', '2165': '  /* Get tick */', '2166': '  tickstart = HAL_GetTick();', '2167': '', '2168': '  /* Wait for the lock of the PLL */', '2169': '  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)', '2170': '  {', '2171': '    /* Check for the Timeout */', '2172': '    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2173': '    {', '2174': '      /* Process Unlocked */', '2175': '      __HAL_UNLOCK(hdsi);', '2176': '', '2177': '      return HAL_TIMEOUT;', '2178': '    }', '2179': '  }', '2180': '', '2181': '  /* Process unlocked */', '2182': '  __HAL_UNLOCK(hdsi);', '2183': '', '2184': '  return HAL_OK;', '2185': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "0a6745db-64cb-4b7e-bbca-79e0ac34f710",
+      "tool_call_id": "call_00_D7FO3aUdajDMelsSlr6SgljN",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 46,
+          "prompt_tokens": 5857,
+          "total_tokens": 5903,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1792
+          },
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 4065
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "80beef87-40bd-4de6-a61b-382e0121c43b",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--112ac148-0fe0-4a0c-9627-47d08ebec61d-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_DSI_ExitULPMData"
+          },
+          "id": "call_00_zpTSJEexIeyS2Rog2Js6V3X8",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5857,
+        "output_tokens": 46,
+        "total_tokens": 5903,
+        "input_token_details": {
+          "cache_read": 1792
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', location_line=2018, function_content='/**\\n* @brief  Exit the ULPM (Ultra Low Power Mode) with the D-PHY PLL running\\n*         (only data lanes are in ULPM)\\n* @param  hdsi  pointer to a DSI_HandleTypeDef structure that contains\\n*               the configuration information for the DSI.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_DSI_ExitULPMData(DSI_HandleTypeDef *hdsi)\\n{\\n  uint32_t tickstart;\\n\\n  /* Process locked */\\n  __HAL_LOCK(hdsi);\\n\\n  /* Verify that all active lanes are in ULPM */\\n  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)\\n  {\\n    if ((hdsi->Instance->PSR &  DSI_PSR_UAN0) != 0U)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_ERROR;\\n    }\\n  }\\n  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)\\n  {\\n    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  | DSI_PSR_UAN1)) != 0U)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_ERROR;\\n    }\\n  }\\n  else\\n  {\\n    /* Process unlocked */\\n    __HAL_UNLOCK(hdsi);\\n\\n    return HAL_ERROR;\\n  }\\n\\n  /* Turn on the DSI PLL */\\n  __HAL_DSI_PLL_ENABLE(hdsi);\\n\\n  /* Requires min of 400us delay before reading the PLLLS flag */\\n  /* 1ms delay is inserted that is the minimum HAL delay granularity */\\n  HAL_Delay(1);\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* Wait for the lock of the PLL */\\n  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)\\n  {\\n    /* Check for the Timeout */\\n    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n  /* Exit ULPS on Data Lanes */\\n  hdsi->Instance->PUCR |= DSI_PUCR_UEDL;\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* Wait until all active lanes exit ULPM */\\n  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)\\n  {\\n    while ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)\\n    {\\n      /* Check for the Timeout */\\n      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n      {\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hdsi);\\n\\n        return HAL_TIMEOUT;\\n      }\\n    }\\n  }\\n  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)\\n  {\\n    while ((hdsi->Instance->PSR & (DSI_PSR_UAN0 | DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))\\n    {\\n      /* Check for the Timeout */\\n      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n      {\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hdsi);\\n\\n        return HAL_TIMEOUT;\\n      }\\n    }\\n  }\\n  else\\n  {\\n    /* Process unlocked */\\n    __HAL_UNLOCK(hdsi);\\n\\n    return HAL_ERROR;\\n  }\\n\\n  /* wait for 1 ms*/\\n  HAL_Delay(1U);\\n\\n  /* De-assert the ULPM requests and the ULPM exit bits */\\n  hdsi->Instance->PUCR = 0U;\\n\\n  /* Verify that D-PHY PLL is enabled */\\n  if ((hdsi->Instance->WRPCR & DSI_WRPCR_PLLEN) != DSI_WRPCR_PLLEN)\\n  {\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hdsi);\\n    return HAL_ERROR;\\n  }\\n\\n  /* Verify that all active lanes are in Stop state */\\n  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)\\n  {\\n    if ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n      return HAL_ERROR;\\n    }\\n  }\\n  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)\\n  {\\n    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  |  DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n      return HAL_ERROR;\\n    }\\n  }\\n  else\\n  {\\n    /* Process unlocked */\\n    __HAL_UNLOCK(hdsi);\\n    return HAL_ERROR;\\n  }\\n\\n  /* Verify that D-PHY PLL is locked */\\n  /* Requires min of 400us delay before reading the PLLLS flag */\\n  /* 1ms delay is inserted that is the minimum HAL delay granularity */\\n  HAL_Delay(1);\\n\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  /* Wait for the lock of the PLL */\\n  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)\\n  {\\n    /* Check for the Timeout */\\n    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)\\n    {\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hdsi);\\n\\n      return HAL_TIMEOUT;\\n    }\\n  }\\n\\n  /* Process unlocked */\\n  __HAL_UNLOCK(hdsi);\\n\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'2018': 'HAL_StatusTypeDef HAL_DSI_ExitULPMData(DSI_HandleTypeDef *hdsi)', '2019': '{', '2020': '  uint32_t tickstart;', '2021': '', '2022': '  /* Process locked */', '2023': '  __HAL_LOCK(hdsi);', '2024': '', '2025': '  /* Verify that all active lanes are in ULPM */', '2026': '  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)', '2027': '  {', '2028': '    if ((hdsi->Instance->PSR &  DSI_PSR_UAN0) != 0U)', '2029': '    {', '2030': '      /* Process Unlocked */', '2031': '      __HAL_UNLOCK(hdsi);', '2032': '', '2033': '      return HAL_ERROR;', '2034': '    }', '2035': '  }', '2036': '  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)', '2037': '  {', '2038': '    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  | DSI_PSR_UAN1)) != 0U)', '2039': '    {', '2040': '      /* Process Unlocked */', '2041': '      __HAL_UNLOCK(hdsi);', '2042': '', '2043': '      return HAL_ERROR;', '2044': '    }', '2045': '  }', '2046': '  else', '2047': '  {', '2048': '    /* Process unlocked */', '2049': '    __HAL_UNLOCK(hdsi);', '2050': '', '2051': '    return HAL_ERROR;', '2052': '  }', '2053': '', '2054': '  /* Turn on the DSI PLL */', '2055': '  __HAL_DSI_PLL_ENABLE(hdsi);', '2056': '', '2057': '  /* Requires min of 400us delay before reading the PLLLS flag */', '2058': '  /* 1ms delay is inserted that is the minimum HAL delay granularity */', '2059': '  HAL_Delay(1);', '2060': '', '2061': '  /* Get tick */', '2062': '  tickstart = HAL_GetTick();', '2063': '', '2064': '  /* Wait for the lock of the PLL */', '2065': '  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)', '2066': '  {', '2067': '    /* Check for the Timeout */', '2068': '    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2069': '    {', '2070': '      /* Process Unlocked */', '2071': '      __HAL_UNLOCK(hdsi);', '2072': '', '2073': '      return HAL_TIMEOUT;', '2074': '    }', '2075': '  }', '2076': '', '2077': '  /* Exit ULPS on Data Lanes */', '2078': '  hdsi->Instance->PUCR |= DSI_PUCR_UEDL;', '2079': '', '2080': '  /* Get tick */', '2081': '  tickstart = HAL_GetTick();', '2082': '', '2083': '  /* Wait until all active lanes exit ULPM */', '2084': '  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)', '2085': '  {', '2086': '    while ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)', '2087': '    {', '2088': '      /* Check for the Timeout */', '2089': '      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2090': '      {', '2091': '        /* Process Unlocked */', '2092': '        __HAL_UNLOCK(hdsi);', '2093': '', '2094': '        return HAL_TIMEOUT;', '2095': '      }', '2096': '    }', '2097': '  }', '2098': '  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)', '2099': '  {', '2100': '    while ((hdsi->Instance->PSR & (DSI_PSR_UAN0 | DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))', '2101': '    {', '2102': '      /* Check for the Timeout */', '2103': '      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2104': '      {', '2105': '        /* Process Unlocked */', '2106': '        __HAL_UNLOCK(hdsi);', '2107': '', '2108': '        return HAL_TIMEOUT;', '2109': '      }', '2110': '    }', '2111': '  }', '2112': '  else', '2113': '  {', '2114': '    /* Process unlocked */', '2115': '    __HAL_UNLOCK(hdsi);', '2116': '', '2117': '    return HAL_ERROR;', '2118': '  }', '2119': '', '2120': '  /* wait for 1 ms*/', '2121': '  HAL_Delay(1U);', '2122': '', '2123': '  /* De-assert the ULPM requests and the ULPM exit bits */', '2124': '  hdsi->Instance->PUCR = 0U;', '2125': '', '2126': '  /* Verify that D-PHY PLL is enabled */', '2127': '  if ((hdsi->Instance->WRPCR & DSI_WRPCR_PLLEN) != DSI_WRPCR_PLLEN)', '2128': '  {', '2129': '    /* Process Unlocked */', '2130': '    __HAL_UNLOCK(hdsi);', '2131': '    return HAL_ERROR;', '2132': '  }', '2133': '', '2134': '  /* Verify that all active lanes are in Stop state */', '2135': '  if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_ONE_DATA_LANE)', '2136': '  {', '2137': '    if ((hdsi->Instance->PSR & DSI_PSR_UAN0) != DSI_PSR_UAN0)', '2138': '    {', '2139': '      /* Process Unlocked */', '2140': '      __HAL_UNLOCK(hdsi);', '2141': '      return HAL_ERROR;', '2142': '    }', '2143': '  }', '2144': '  else if ((hdsi->Instance->PCONFR & DSI_PCONFR_NL) == DSI_TWO_DATA_LANES)', '2145': '  {', '2146': '    if ((hdsi->Instance->PSR & (DSI_PSR_UAN0  |  DSI_PSR_UAN1)) != (DSI_PSR_UAN0 | DSI_PSR_UAN1))', '2147': '    {', '2148': '      /* Process Unlocked */', '2149': '      __HAL_UNLOCK(hdsi);', '2150': '      return HAL_ERROR;', '2151': '    }', '2152': '  }', '2153': '  else', '2154': '  {', '2155': '    /* Process unlocked */', '2156': '    __HAL_UNLOCK(hdsi);', '2157': '    return HAL_ERROR;', '2158': '  }', '2159': '', '2160': '  /* Verify that D-PHY PLL is locked */', '2161': '  /* Requires min of 400us delay before reading the PLLLS flag */', '2162': '  /* 1ms delay is inserted that is the minimum HAL delay granularity */', '2163': '  HAL_Delay(1);', '2164': '', '2165': '  /* Get tick */', '2166': '  tickstart = HAL_GetTick();', '2167': '', '2168': '  /* Wait for the lock of the PLL */', '2169': '  while (__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS) == 0U)', '2170': '  {', '2171': '    /* Check for the Timeout */', '2172': '    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)', '2173': '    {', '2174': '      /* Process Unlocked */', '2175': '      __HAL_UNLOCK(hdsi);', '2176': '', '2177': '      return HAL_TIMEOUT;', '2178': '    }', '2179': '  }', '2180': '', '2181': '  /* Process unlocked */', '2182': '  __HAL_UNLOCK(hdsi);', '2183': '', '2184': '  return HAL_OK;', '2185': '}'})\nMMIO Exprs info: [MmioExprInfo(name='tmpreg', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2055, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='WRPCR', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2055, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='WRPCR', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2127, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='... |= ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2078, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2026, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2028, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2036, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2038, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2055, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2065, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2084, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2086, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2098, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2100, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2127, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2135, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2137, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2144, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2146, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2169, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... != ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2028, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_DSI_ExitULPMData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2038, expr_type='binary', enclosing_type='control_flow')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "e9a54935-8706-4bd0-a301-a96c8c71a178",
+      "tool_call_id": "call_00_zpTSJEexIeyS2Rog2Js6V3X8",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also collect the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 40,
+          "prompt_tokens": 11861,
+          "total_tokens": 11901,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 5888
+          },
+          "prompt_cache_hit_tokens": 5888,
+          "prompt_cache_miss_tokens": 5973
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "c15a3831-9dfd-481e-b455-26bfc237ac86",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--2905bce7-7f3f-4c40-9c05-ea02379b5590-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_DSI_ExitULPMData"
+          },
+          "id": "call_00_QJe24XHb0r13cLlicZUyCI1T",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 11861,
+        "output_tokens": 40,
+        "total_tokens": 11901,
+        "input_token_details": {
+          "cache_read": 5888
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2062, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2062, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2068, call_type='direct', ret_type='noReturnValue', start_line_content='    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2081, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2081, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2089, call_type='direct', ret_type='noReturnValue', start_line_content='      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2103, call_type='direct', ret_type='noReturnValue', start_line_content='      if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2166, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2166, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2172, call_type='direct', ret_type='noReturnValue', start_line_content='    if ((HAL_GetTick() - tickstart) > DSI_TIMEOUT_VALUE)'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_Delay', call_tag='call to HAL_Delay', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2059, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_Delay(1);'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_Delay', call_tag='call to HAL_Delay', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2121, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_Delay(1U);'), FunctionCallInfo(caller_name='HAL_DSI_ExitULPMData', callee_name='HAL_Delay', call_tag='call to HAL_Delay', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', start_line=2163, call_type='direct', ret_type='noReturnValue', start_line_content='  HAL_Delay(1);')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "28555de8-cd15-40df-ac7f-e9bb35a08f20",
+      "tool_call_id": "call_00_QJe24XHb0r13cLlicZUyCI1T",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me get information about the DSI_HandleTypeDef structure to better understand the peripheral operations:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 13475,
+          "total_tokens": 13519,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11840
+          },
+          "prompt_cache_hit_tokens": 11840,
+          "prompt_cache_miss_tokens": 1635
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "83cae82f-08e3-4565-9a70-884fea9c335c",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--fd7b4cff-7496-4579-8956-7f5508f9a3c0-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "DSI_HandleTypeDef"
+          },
+          "id": "call_00_6O3rbu2vvzXqf8FseD2TmBTv",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 13475,
+        "output_tokens": 44,
+        "total_tokens": 13519,
+        "input_token_details": {
+          "cache_read": 11840
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='DSI_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dsi.h', location_line=310, struct_content='#endif /* USE_HAL_DSI_REGISTER_CALLBACKS */\\n{\\n  DSI_TypeDef               *Instance;    /*!< Register base address      */\\n  DSI_InitTypeDef           Init;         /*!< DSI required parameters    */\\n  HAL_LockTypeDef           Lock;         /*!< DSI peripheral status      */\\n  __IO HAL_DSI_StateTypeDef State;        /*!< DSI communication state    */\\n  __IO uint32_t             ErrorCode;    /*!< DSI Error code             */\\n  uint32_t                  ErrorMsk;     /*!< DSI Error monitoring mask  */\\n\\n#if (USE_HAL_DSI_REGISTER_CALLBACKS == 1)\\n  void (* TearingEffectCallback)(struct __DSI_HandleTypeDef *hdsi);   /*!< DSI Tearing Effect Callback */\\n  void (* EndOfRefreshCallback)(struct __DSI_HandleTypeDef *hdsi);    /*!< DSI End Of Refresh Callback */\\n  void (* ErrorCallback)(struct __DSI_HandleTypeDef *hdsi);           /*!< DSI Error Callback          */\\n\\n  void (* MspInitCallback)(struct __DSI_HandleTypeDef *hdsi);         /*!< DSI Msp Init callback       */\\n  void (* MspDeInitCallback)(struct __DSI_HandleTypeDef *hdsi);       /*!< DSI Msp DeInit callback     */\\n\\n#endif /* USE_HAL_DSI_REGISTER_CALLBACKS */\\n\\n} DSI_HandleTypeDef;\\n', struct_content_in_lines={'310': '{', '311': '  DSI_TypeDef               *Instance;    /*!< Register base address      */', '312': '  DSI_InitTypeDef           Init;         /*!< DSI required parameters    */', '313': '  HAL_LockTypeDef           Lock;         /*!< DSI peripheral status      */', '314': '  __IO HAL_DSI_StateTypeDef State;        /*!< DSI communication state    */', '315': '  __IO uint32_t             ErrorCode;    /*!< DSI Error code             */', '316': '  uint32_t                  ErrorMsk;     /*!< DSI Error monitoring mask  */', '317': '', '318': '#if (USE_HAL_DSI_REGISTER_CALLBACKS == 1)', '319': '  void (* TearingEffectCallback)(struct __DSI_HandleTypeDef *hdsi);   /*!< DSI Tearing Effect Callback */', '320': '  void (* EndOfRefreshCallback)(struct __DSI_HandleTypeDef *hdsi);    /*!< DSI End Of Refresh Callback */', '321': '  void (* ErrorCallback)(struct __DSI_HandleTypeDef *hdsi);           /*!< DSI Error Callback          */', '322': '', '323': '  void (* MspInitCallback)(struct __DSI_HandleTypeDef *hdsi);         /*!< DSI Msp Init callback       */', '324': '  void (* MspDeInitCallback)(struct __DSI_HandleTypeDef *hdsi);       /*!< DSI Msp DeInit callback     */', '325': '', '326': '#endif /* USE_HAL_DSI_REGISTER_CALLBACKS */', '327': '', '328': '} DSI_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'DSI_InitTypeDef', 'Lock': '(unnamed enum)', 'State': '(unnamed enum)', 'ErrorCode': '__fd_mask', 'ErrorMsk': 'unsigned long'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "a8eb421e-c117-4dc7-9914-2061f549ed16",
+      "tool_call_id": "call_00_6O3rbu2vvzXqf8FseD2TmBTv",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `HAL_DSI_ExitULPMData`, here is my classification:\n\n## Function Classification: **RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function exits Ultra Low Power Mode (ULPM) for DSI (Display Serial Interface) data lanes while keeping the D-PHY PLL running. It performs power management operations for the display interface.\n\n2. **Analysis of Operations**:\n   - The function performs extensive peripheral register operations:\n     - Reads from `hdsi->Instance->PCONFR`, `hdsi->Instance->PSR`, `hdsi->Instance->WRPCR`\n     - Writes to `hdsi->Instance->PUCR` (ULPM control register)\n     - Uses `__HAL_DSI_PLL_ENABLE(hdsi)` and `__HAL_DSI_GET_FLAG(hdsi, DSI_FLAG_PLLLS)`\n   - Contains timeout loops waiting for hardware status flags\n   - Uses `HAL_Delay()` for timing requirements\n   - Performs lock/unlock operations (`__HAL_LOCK/__HAL_UNLOCK`)\n\n3. **Category Justification**:\n   - **NOT RECV**: This function does not perform data transmission/reception operations. It's focused on power management and hardware state control.\n   - **NOT IRQ**: There are no interrupt service routines or interrupt enable operations in this function.\n   - **NOT INIT**: While it performs some configuration, it's not an initialization function but rather a power state transition function.\n   - **RETURNOK**: This function primarily performs driver-specific peripheral operations (power management, PLL control, lane state management) that don't affect upper-layer data structures. The core functionality is hardware-specific and can be safely replaced with a success return value.\n\n4. **Replacement Strategy**: \n   - Since this is a power management function for display hardware that won't be available in the POSIX environment, the safest approach is to return `HAL_OK` to indicate successful operation.\n   - The function's main purpose is to transition hardware from low-power mode to active mode, which is not relevant in a POSIX simulation environment.\n\nThe function contains complex hardware state checking and timing operations that are specific to the DSI peripheral, making it suitable for the RETURNOK category where we can simply return success without affecting the overall program logic.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 500,
+          "prompt_tokens": 14446,
+          "total_tokens": 14946,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 13504
+          },
+          "prompt_cache_hit_tokens": 13504,
+          "prompt_cache_miss_tokens": 942
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "82bc0053-c217-4f02-8ea6-c1f9da433d5c",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--54e0c622-2401-4307-9dac-4643284b2114-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 14446,
+        "output_tokens": 500,
+        "total_tokens": 14946,
+        "input_token_details": {
+          "cache_read": 13504
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_DSI_ExitULPMData",
+    "function_type": "RETURNOK",
+    "functionality": "Exits Ultra Low Power Mode (ULPM) for DSI data lanes while keeping the D-PHY PLL running, performing power management operations for the display interface",
+    "classification_reason": "This function performs driver-specific peripheral operations including PLL control, lane state management, and power mode transitions that are hardware-specific and don't affect upper-layer data structures. It contains extensive register operations, timeout loops, and timing delays specific to the DSI peripheral, making it suitable for replacement with a simple success return value.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

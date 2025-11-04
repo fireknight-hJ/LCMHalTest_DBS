@@ -1,0 +1,308 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "a17bdb53-da27-410f-92c4-667364b17305"
+    },
+    {
+      "content": "Classify the function : HAL_I2C_Slave_Receive",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "b1502469-be14-4830-b8cc-67d5477dff69"
+    },
+    {
+      "content": "I'll analyze the function `HAL_I2C_Slave_Receive` to classify it according to the specified categories. Let me start by collecting information about this function.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 60,
+          "prompt_tokens": 1746,
+          "total_tokens": 1806,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 18
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "dbf86927-af49-4ba9-b8bc-c16c2ff2e8aa",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--fc4a73f1-fac9-4021-ae71-26b2d8632bfd-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_I2C_Slave_Receive"
+          },
+          "id": "call_00_zqkFqMETYUZz6EAdCsEXkumH",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1746,
+        "output_tokens": 60,
+        "total_tokens": 1806,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=1565, function_content='/**\\n* @brief  Receive in slave mode an amount of data in blocking mode\\n* @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains\\n*                the configuration information for the specified I2C.\\n* @param  pData Pointer to data buffer\\n* @param  Size Amount of data to be sent\\n* @param  Timeout Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_I2C_Slave_Receive(I2C_HandleTypeDef *hi2c, uint8_t *pData, uint16_t Size,\\n                                        uint32_t Timeout)\\n{\\n  uint32_t tickstart;\\n\\n  if (hi2c->State == HAL_I2C_STATE_READY)\\n  {\\n    if ((pData == NULL) || (Size == 0U))\\n    {\\n      hi2c->ErrorCode = HAL_I2C_ERROR_INVALID_PARAM;\\n      return  HAL_ERROR;\\n    }\\n    /* Process Locked */\\n    __HAL_LOCK(hi2c);\\n\\n    /* Init tickstart for timeout management*/\\n    tickstart = HAL_GetTick();\\n\\n    hi2c->State     = HAL_I2C_STATE_BUSY_RX;\\n    hi2c->Mode      = HAL_I2C_MODE_SLAVE;\\n    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;\\n\\n    /* Prepare transfer parameters */\\n    hi2c->pBuffPtr  = pData;\\n    hi2c->XferCount = Size;\\n    hi2c->XferSize = hi2c->XferCount;\\n    hi2c->XferISR   = NULL;\\n\\n    /* Enable Address Acknowledge */\\n    hi2c->Instance->CR2 &= ~I2C_CR2_NACK;\\n\\n    /* Wait until ADDR flag is set */\\n    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_ADDR, RESET, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    /* Clear ADDR flag */\\n    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_ADDR);\\n\\n    /* Wait until DIR flag is reset Receiver mode */\\n    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_DIR, SET, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    while (hi2c->XferCount > 0U)\\n    {\\n      /* Wait until RXNE flag is set */\\n      if (I2C_WaitOnRXNEFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)\\n      {\\n        /* Disable Address Acknowledge */\\n        hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n\\n        /* Store Last receive data if any */\\n        if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_RXNE) == SET)\\n        {\\n          /* Read data from RXDR */\\n          *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;\\n\\n          /* Increment Buffer pointer */\\n          hi2c->pBuffPtr++;\\n\\n          hi2c->XferCount--;\\n          hi2c->XferSize--;\\n        }\\n\\n        return HAL_ERROR;\\n      }\\n\\n      /* Read data from RXDR */\\n      *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;\\n\\n      /* Increment Buffer pointer */\\n      hi2c->pBuffPtr++;\\n\\n      hi2c->XferCount--;\\n      hi2c->XferSize--;\\n    }\\n\\n    /* Wait until STOP flag is set */\\n    if (I2C_WaitOnSTOPFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    /* Clear STOP flag */\\n    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);\\n\\n    /* Wait until BUSY flag is reset */\\n    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_BUSY, SET, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    /* Disable Address Acknowledge */\\n    hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n\\n    hi2c->State = HAL_I2C_STATE_READY;\\n    hi2c->Mode  = HAL_I2C_MODE_NONE;\\n\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hi2c);\\n\\n    return HAL_OK;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'1565': 'HAL_StatusTypeDef HAL_I2C_Slave_Receive(I2C_HandleTypeDef *hi2c, uint8_t *pData, uint16_t Size,', '1566': '                                        uint32_t Timeout)', '1567': '{', '1568': '  uint32_t tickstart;', '1569': '', '1570': '  if (hi2c->State == HAL_I2C_STATE_READY)', '1571': '  {', '1572': '    if ((pData == NULL) || (Size == 0U))', '1573': '    {', '1574': '      hi2c->ErrorCode = HAL_I2C_ERROR_INVALID_PARAM;', '1575': '      return  HAL_ERROR;', '1576': '    }', '1577': '    /* Process Locked */', '1578': '    __HAL_LOCK(hi2c);', '1579': '', '1580': '    /* Init tickstart for timeout management*/', '1581': '    tickstart = HAL_GetTick();', '1582': '', '1583': '    hi2c->State     = HAL_I2C_STATE_BUSY_RX;', '1584': '    hi2c->Mode      = HAL_I2C_MODE_SLAVE;', '1585': '    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;', '1586': '', '1587': '    /* Prepare transfer parameters */', '1588': '    hi2c->pBuffPtr  = pData;', '1589': '    hi2c->XferCount = Size;', '1590': '    hi2c->XferSize = hi2c->XferCount;', '1591': '    hi2c->XferISR   = NULL;', '1592': '', '1593': '    /* Enable Address Acknowledge */', '1594': '    hi2c->Instance->CR2 &= ~I2C_CR2_NACK;', '1595': '', '1596': '    /* Wait until ADDR flag is set */', '1597': '    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_ADDR, RESET, Timeout, tickstart) != HAL_OK)', '1598': '    {', '1599': '      /* Disable Address Acknowledge */', '1600': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1601': '      return HAL_ERROR;', '1602': '    }', '1603': '', '1604': '    /* Clear ADDR flag */', '1605': '    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_ADDR);', '1606': '', '1607': '    /* Wait until DIR flag is reset Receiver mode */', '1608': '    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_DIR, SET, Timeout, tickstart) != HAL_OK)', '1609': '    {', '1610': '      /* Disable Address Acknowledge */', '1611': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1612': '      return HAL_ERROR;', '1613': '    }', '1614': '', '1615': '    while (hi2c->XferCount > 0U)', '1616': '    {', '1617': '      /* Wait until RXNE flag is set */', '1618': '      if (I2C_WaitOnRXNEFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)', '1619': '      {', '1620': '        /* Disable Address Acknowledge */', '1621': '        hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1622': '', '1623': '        /* Store Last receive data if any */', '1624': '        if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_RXNE) == SET)', '1625': '        {', '1626': '          /* Read data from RXDR */', '1627': '          *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;', '1628': '', '1629': '          /* Increment Buffer pointer */', '1630': '          hi2c->pBuffPtr++;', '1631': '', '1632': '          hi2c->XferCount--;', '1633': '          hi2c->XferSize--;', '1634': '        }', '1635': '', '1636': '        return HAL_ERROR;', '1637': '      }', '1638': '', '1639': '      /* Read data from RXDR */', '1640': '      *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;', '1641': '', '1642': '      /* Increment Buffer pointer */', '1643': '      hi2c->pBuffPtr++;', '1644': '', '1645': '      hi2c->XferCount--;', '1646': '      hi2c->XferSize--;', '1647': '    }', '1648': '', '1649': '    /* Wait until STOP flag is set */', '1650': '    if (I2C_WaitOnSTOPFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)', '1651': '    {', '1652': '      /* Disable Address Acknowledge */', '1653': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1654': '      return HAL_ERROR;', '1655': '    }', '1656': '', '1657': '    /* Clear STOP flag */', '1658': '    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);', '1659': '', '1660': '    /* Wait until BUSY flag is reset */', '1661': '    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_BUSY, SET, Timeout, tickstart) != HAL_OK)', '1662': '    {', '1663': '      /* Disable Address Acknowledge */', '1664': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1665': '      return HAL_ERROR;', '1666': '    }', '1667': '', '1668': '    /* Disable Address Acknowledge */', '1669': '    hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1670': '', '1671': '    hi2c->State = HAL_I2C_STATE_READY;', '1672': '    hi2c->Mode  = HAL_I2C_MODE_NONE;', '1673': '', '1674': '    /* Process Unlocked */', '1675': '    __HAL_UNLOCK(hi2c);', '1676': '', '1677': '    return HAL_OK;', '1678': '  }', '1679': '  else', '1680': '  {', '1681': '    return HAL_BUSY;', '1682': '  }', '1683': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "583d7b40-5b54-46a8-9e73-97475ed16b93",
+      "tool_call_id": "call_00_zqkFqMETYUZz6EAdCsEXkumH",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 46,
+          "prompt_tokens": 4943,
+          "total_tokens": 4989,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1792
+          },
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 3151
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "2cc29345-30bc-4d6a-9f13-74468adb49a7",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--81b23307-d4d9-4f4b-a446-47eb4711967a-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_I2C_Slave_Receive"
+          },
+          "id": "call_00_2I7agLIyByoNrSknrQMwjtTq",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4943,
+        "output_tokens": 46,
+        "total_tokens": 4989,
+        "input_token_details": {
+          "cache_read": 1792
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=1565, function_content='/**\\n* @brief  Receive in slave mode an amount of data in blocking mode\\n* @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains\\n*                the configuration information for the specified I2C.\\n* @param  pData Pointer to data buffer\\n* @param  Size Amount of data to be sent\\n* @param  Timeout Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_I2C_Slave_Receive(I2C_HandleTypeDef *hi2c, uint8_t *pData, uint16_t Size,\\n                                        uint32_t Timeout)\\n{\\n  uint32_t tickstart;\\n\\n  if (hi2c->State == HAL_I2C_STATE_READY)\\n  {\\n    if ((pData == NULL) || (Size == 0U))\\n    {\\n      hi2c->ErrorCode = HAL_I2C_ERROR_INVALID_PARAM;\\n      return  HAL_ERROR;\\n    }\\n    /* Process Locked */\\n    __HAL_LOCK(hi2c);\\n\\n    /* Init tickstart for timeout management*/\\n    tickstart = HAL_GetTick();\\n\\n    hi2c->State     = HAL_I2C_STATE_BUSY_RX;\\n    hi2c->Mode      = HAL_I2C_MODE_SLAVE;\\n    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;\\n\\n    /* Prepare transfer parameters */\\n    hi2c->pBuffPtr  = pData;\\n    hi2c->XferCount = Size;\\n    hi2c->XferSize = hi2c->XferCount;\\n    hi2c->XferISR   = NULL;\\n\\n    /* Enable Address Acknowledge */\\n    hi2c->Instance->CR2 &= ~I2C_CR2_NACK;\\n\\n    /* Wait until ADDR flag is set */\\n    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_ADDR, RESET, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    /* Clear ADDR flag */\\n    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_ADDR);\\n\\n    /* Wait until DIR flag is reset Receiver mode */\\n    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_DIR, SET, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    while (hi2c->XferCount > 0U)\\n    {\\n      /* Wait until RXNE flag is set */\\n      if (I2C_WaitOnRXNEFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)\\n      {\\n        /* Disable Address Acknowledge */\\n        hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n\\n        /* Store Last receive data if any */\\n        if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_RXNE) == SET)\\n        {\\n          /* Read data from RXDR */\\n          *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;\\n\\n          /* Increment Buffer pointer */\\n          hi2c->pBuffPtr++;\\n\\n          hi2c->XferCount--;\\n          hi2c->XferSize--;\\n        }\\n\\n        return HAL_ERROR;\\n      }\\n\\n      /* Read data from RXDR */\\n      *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;\\n\\n      /* Increment Buffer pointer */\\n      hi2c->pBuffPtr++;\\n\\n      hi2c->XferCount--;\\n      hi2c->XferSize--;\\n    }\\n\\n    /* Wait until STOP flag is set */\\n    if (I2C_WaitOnSTOPFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    /* Clear STOP flag */\\n    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);\\n\\n    /* Wait until BUSY flag is reset */\\n    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_BUSY, SET, Timeout, tickstart) != HAL_OK)\\n    {\\n      /* Disable Address Acknowledge */\\n      hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n      return HAL_ERROR;\\n    }\\n\\n    /* Disable Address Acknowledge */\\n    hi2c->Instance->CR2 |= I2C_CR2_NACK;\\n\\n    hi2c->State = HAL_I2C_STATE_READY;\\n    hi2c->Mode  = HAL_I2C_MODE_NONE;\\n\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hi2c);\\n\\n    return HAL_OK;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'1565': 'HAL_StatusTypeDef HAL_I2C_Slave_Receive(I2C_HandleTypeDef *hi2c, uint8_t *pData, uint16_t Size,', '1566': '                                        uint32_t Timeout)', '1567': '{', '1568': '  uint32_t tickstart;', '1569': '', '1570': '  if (hi2c->State == HAL_I2C_STATE_READY)', '1571': '  {', '1572': '    if ((pData == NULL) || (Size == 0U))', '1573': '    {', '1574': '      hi2c->ErrorCode = HAL_I2C_ERROR_INVALID_PARAM;', '1575': '      return  HAL_ERROR;', '1576': '    }', '1577': '    /* Process Locked */', '1578': '    __HAL_LOCK(hi2c);', '1579': '', '1580': '    /* Init tickstart for timeout management*/', '1581': '    tickstart = HAL_GetTick();', '1582': '', '1583': '    hi2c->State     = HAL_I2C_STATE_BUSY_RX;', '1584': '    hi2c->Mode      = HAL_I2C_MODE_SLAVE;', '1585': '    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;', '1586': '', '1587': '    /* Prepare transfer parameters */', '1588': '    hi2c->pBuffPtr  = pData;', '1589': '    hi2c->XferCount = Size;', '1590': '    hi2c->XferSize = hi2c->XferCount;', '1591': '    hi2c->XferISR   = NULL;', '1592': '', '1593': '    /* Enable Address Acknowledge */', '1594': '    hi2c->Instance->CR2 &= ~I2C_CR2_NACK;', '1595': '', '1596': '    /* Wait until ADDR flag is set */', '1597': '    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_ADDR, RESET, Timeout, tickstart) != HAL_OK)', '1598': '    {', '1599': '      /* Disable Address Acknowledge */', '1600': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1601': '      return HAL_ERROR;', '1602': '    }', '1603': '', '1604': '    /* Clear ADDR flag */', '1605': '    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_ADDR);', '1606': '', '1607': '    /* Wait until DIR flag is reset Receiver mode */', '1608': '    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_DIR, SET, Timeout, tickstart) != HAL_OK)', '1609': '    {', '1610': '      /* Disable Address Acknowledge */', '1611': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1612': '      return HAL_ERROR;', '1613': '    }', '1614': '', '1615': '    while (hi2c->XferCount > 0U)', '1616': '    {', '1617': '      /* Wait until RXNE flag is set */', '1618': '      if (I2C_WaitOnRXNEFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)', '1619': '      {', '1620': '        /* Disable Address Acknowledge */', '1621': '        hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1622': '', '1623': '        /* Store Last receive data if any */', '1624': '        if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_RXNE) == SET)', '1625': '        {', '1626': '          /* Read data from RXDR */', '1627': '          *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;', '1628': '', '1629': '          /* Increment Buffer pointer */', '1630': '          hi2c->pBuffPtr++;', '1631': '', '1632': '          hi2c->XferCount--;', '1633': '          hi2c->XferSize--;', '1634': '        }', '1635': '', '1636': '        return HAL_ERROR;', '1637': '      }', '1638': '', '1639': '      /* Read data from RXDR */', '1640': '      *hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;', '1641': '', '1642': '      /* Increment Buffer pointer */', '1643': '      hi2c->pBuffPtr++;', '1644': '', '1645': '      hi2c->XferCount--;', '1646': '      hi2c->XferSize--;', '1647': '    }', '1648': '', '1649': '    /* Wait until STOP flag is set */', '1650': '    if (I2C_WaitOnSTOPFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)', '1651': '    {', '1652': '      /* Disable Address Acknowledge */', '1653': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1654': '      return HAL_ERROR;', '1655': '    }', '1656': '', '1657': '    /* Clear STOP flag */', '1658': '    __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);', '1659': '', '1660': '    /* Wait until BUSY flag is reset */', '1661': '    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_BUSY, SET, Timeout, tickstart) != HAL_OK)', '1662': '    {', '1663': '      /* Disable Address Acknowledge */', '1664': '      hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1665': '      return HAL_ERROR;', '1666': '    }', '1667': '', '1668': '    /* Disable Address Acknowledge */', '1669': '    hi2c->Instance->CR2 |= I2C_CR2_NACK;', '1670': '', '1671': '    hi2c->State = HAL_I2C_STATE_READY;', '1672': '    hi2c->Mode  = HAL_I2C_MODE_NONE;', '1673': '', '1674': '    /* Process Unlocked */', '1675': '    __HAL_UNLOCK(hi2c);', '1676': '', '1677': '    return HAL_OK;', '1678': '  }', '1679': '  else', '1680': '  {', '1681': '    return HAL_BUSY;', '1682': '  }', '1683': '}'})\nMMIO Exprs info: [MmioExprInfo(name='pData', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1572, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='pData', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1588, expr_type='varaccess', enclosing_type='assign_to'), MmioExprInfo(name='Size', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1572, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='Size', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1589, expr_type='varaccess', enclosing_type='assign_to'), MmioExprInfo(name='pBuffPtr', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1588, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pBuffPtr', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1627, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pBuffPtr', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1630, expr_type='varaccess', enclosing_type='unary'), MmioExprInfo(name='pBuffPtr', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1640, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pBuffPtr', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1643, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='XferSize', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1590, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='XferSize', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1633, expr_type='varaccess', enclosing_type='unary'), MmioExprInfo(name='XferSize', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1646, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='XferCount', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1589, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='XferCount', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1590, expr_type='varaccess', enclosing_type='assign_to'), MmioExprInfo(name='XferCount', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1615, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='XferCount', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1632, expr_type='varaccess', enclosing_type='unary'), MmioExprInfo(name='XferCount', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1645, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='~ ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1594, expr_type='unary', enclosing_type='skip'), MmioExprInfo(name='* ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1627, expr_type='unary', enclosing_type='assign_from'), MmioExprInfo(name='* ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1640, expr_type='unary', enclosing_type='assign_from'), MmioExprInfo(name='... &= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1594, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... |= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1600, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... |= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1611, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... |= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1621, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... |= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1653, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... |= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1664, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... |= ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1669, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... & ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1624, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... ++', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1643, expr_type='unary', enclosing_type='stmt'), MmioExprInfo(name='... --', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1645, expr_type='unary', enclosing_type='stmt'), MmioExprInfo(name='... --', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1646, expr_type='unary', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1605, expr_type='assign', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_I2C_Slave_Receive', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1658, expr_type='assign', enclosing_type='skip')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "5fd5fe2b-4e2f-42cf-aae3-548cedcc82a2",
+      "tool_call_id": "call_00_2I7agLIyByoNrSknrQMwjtTq",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack and any referenced structures:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 11028,
+          "total_tokens": 11065,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4928
+          },
+          "prompt_cache_hit_tokens": 4928,
+          "prompt_cache_miss_tokens": 6100
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "2b0a6773-b7cd-4abe-a158-491397da3009",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--7e72f36b-59c7-47e6-8313-97cf5c565830-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_I2C_Slave_Receive"
+          },
+          "id": "call_00_4ddpK9RttoJH5miak8XkeTZM",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 11028,
+        "output_tokens": 37,
+        "total_tokens": 11065,
+        "input_token_details": {
+          "cache_read": 4928
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1581, call_type='direct', ret_type='noReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1581, call_type='direct', ret_type='hasReturnValue', start_line_content='    tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='I2C_WaitOnRXNEFlagUntilTimeout', call_tag='call to I2C_WaitOnRXNEFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1618, call_type='direct', ret_type='noReturnValue', start_line_content='      if (I2C_WaitOnRXNEFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='I2C_WaitOnSTOPFlagUntilTimeout', call_tag='call to I2C_WaitOnSTOPFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1650, call_type='direct', ret_type='noReturnValue', start_line_content='    if (I2C_WaitOnSTOPFlagUntilTimeout(hi2c, Timeout, tickstart) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='I2C_WaitOnFlagUntilTimeout', call_tag='call to I2C_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1597, call_type='direct', ret_type='noReturnValue', start_line_content='    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_ADDR, RESET, Timeout, tickstart) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='I2C_WaitOnFlagUntilTimeout', call_tag='call to I2C_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1608, call_type='direct', ret_type='noReturnValue', start_line_content='    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_DIR, SET, Timeout, tickstart) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Receive', callee_name='I2C_WaitOnFlagUntilTimeout', call_tag='call to I2C_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=1661, call_type='direct', ret_type='noReturnValue', start_line_content='    if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_BUSY, SET, Timeout, tickstart) != HAL_OK)')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "db789e07-a57a-4205-acd9-453604829482",
+      "tool_call_id": "call_00_4ddpK9RttoJH5miak8XkeTZM",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the I2C_HandleTypeDef structure to understand the data structures involved:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 12088,
+          "total_tokens": 12132,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11008
+          },
+          "prompt_cache_hit_tokens": 11008,
+          "prompt_cache_miss_tokens": 1080
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "ae6eefca-5d3b-4b74-8b8b-1ab2bac7ad04",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--8a5bb3c6-e882-4e03-a7ce-0deb62e0acf8-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "I2C_HandleTypeDef"
+          },
+          "id": "call_00_u1x0dCy8tFbWA6S6SVkYk8r7",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12088,
+        "output_tokens": 44,
+        "total_tokens": 12132,
+        "input_token_details": {
+          "cache_read": 11008
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='I2C_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c.h', location_line=184, struct_content='/** @defgroup I2C_handle_Structure_definition I2C handle Structure definition\\n* @brief  I2C handle Structure definition\\n* @{\\n*/\\ntypedef struct __I2C_HandleTypeDef\\n{\\n  I2C_TypeDef                *Instance;      /*!< I2C registers base address                */\\n\\n  I2C_InitTypeDef            Init;           /*!< I2C communication parameters              */\\n\\n  uint8_t                    *pBuffPtr;      /*!< Pointer to I2C transfer buffer            */\\n\\n  uint16_t                   XferSize;       /*!< I2C transfer size                         */\\n\\n  __IO uint16_t              XferCount;      /*!< I2C transfer counter                      */\\n\\n  __IO uint32_t              XferOptions;    /*!< I2C sequantial transfer options, this parameter can\\n                                                  be a value of @ref I2C_XFEROPTIONS */\\n\\n  __IO uint32_t              PreviousState;  /*!< I2C communication Previous state          */\\n\\n  HAL_StatusTypeDef(*XferISR)(struct __I2C_HandleTypeDef *hi2c, uint32_t ITFlags, uint32_t ITSources);\\n  /*!< I2C transfer IRQ handler function pointer */\\n\\n  DMA_HandleTypeDef          *hdmatx;        /*!< I2C Tx DMA handle parameters              */\\n\\n  DMA_HandleTypeDef          *hdmarx;        /*!< I2C Rx DMA handle parameters              */\\n\\n\\n  HAL_LockTypeDef            Lock;           /*!< I2C locking object                        */\\n\\n  __IO HAL_I2C_StateTypeDef  State;          /*!< I2C communication state                   */\\n\\n  __IO HAL_I2C_ModeTypeDef   Mode;           /*!< I2C communication mode                    */\\n\\n  __IO uint32_t              ErrorCode;      /*!< I2C Error code                            */\\n\\n  __IO uint32_t              AddrEventCount; /*!< I2C Address Event counter                 */\\n\\n  __IO uint32_t              Devaddress;     /*!< I2C Target device address                 */\\n\\n  __IO uint32_t              Memaddress;     /*!< I2C Target memory address                 */\\n\\n#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)\\n  void (* MasterTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Master Tx Transfer completed callback */\\n  void (* MasterRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Master Rx Transfer completed callback */\\n  void (* SlaveTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Slave Tx Transfer completed callback  */\\n  void (* SlaveRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Slave Rx Transfer completed callback  */\\n  void (* ListenCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Listen Complete callback              */\\n  void (* MemTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Memory Tx Transfer completed callback */\\n  void (* MemRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Memory Rx Transfer completed callback */\\n  void (* ErrorCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Error callback                        */\\n  void (* AbortCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Abort callback                        */\\n\\n  void (* AddrCallback)(struct __I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode);\\n  /*!< I2C Slave Address Match callback */\\n\\n  void (* MspInitCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Msp Init callback                     */\\n  void (* MspDeInitCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Msp DeInit callback                   */\\n\\n#endif  /* USE_HAL_I2C_REGISTER_CALLBACKS */\\n} I2C_HandleTypeDef;\\n', struct_content_in_lines={'184': 'typedef struct __I2C_HandleTypeDef', '185': '{', '186': '  I2C_TypeDef                *Instance;      /*!< I2C registers base address                */', '187': '', '188': '  I2C_InitTypeDef            Init;           /*!< I2C communication parameters              */', '189': '', '190': '  uint8_t                    *pBuffPtr;      /*!< Pointer to I2C transfer buffer            */', '191': '', '192': '  uint16_t                   XferSize;       /*!< I2C transfer size                         */', '193': '', '194': '  __IO uint16_t              XferCount;      /*!< I2C transfer counter                      */', '195': '', '196': '  __IO uint32_t              XferOptions;    /*!< I2C sequantial transfer options, this parameter can', '197': '                                                  be a value of @ref I2C_XFEROPTIONS */', '198': '', '199': '  __IO uint32_t              PreviousState;  /*!< I2C communication Previous state          */', '200': '', '201': '  HAL_StatusTypeDef(*XferISR)(struct __I2C_HandleTypeDef *hi2c, uint32_t ITFlags, uint32_t ITSources);', '202': '  /*!< I2C transfer IRQ handler function pointer */', '203': '', '204': '  DMA_HandleTypeDef          *hdmatx;        /*!< I2C Tx DMA handle parameters              */', '205': '', '206': '  DMA_HandleTypeDef          *hdmarx;        /*!< I2C Rx DMA handle parameters              */', '207': '', '208': '', '209': '  HAL_LockTypeDef            Lock;           /*!< I2C locking object                        */', '210': '', '211': '  __IO HAL_I2C_StateTypeDef  State;          /*!< I2C communication state                   */', '212': '', '213': '  __IO HAL_I2C_ModeTypeDef   Mode;           /*!< I2C communication mode                    */', '214': '', '215': '  __IO uint32_t              ErrorCode;      /*!< I2C Error code                            */', '216': '', '217': '  __IO uint32_t              AddrEventCount; /*!< I2C Address Event counter                 */', '218': '', '219': '  __IO uint32_t              Devaddress;     /*!< I2C Target device address                 */', '220': '', '221': '  __IO uint32_t              Memaddress;     /*!< I2C Target memory address                 */', '222': '', '223': '#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)', '224': '  void (* MasterTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '225': '  /*!< I2C Master Tx Transfer completed callback */', '226': '  void (* MasterRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '227': '  /*!< I2C Master Rx Transfer completed callback */', '228': '  void (* SlaveTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '229': '  /*!< I2C Slave Tx Transfer completed callback  */', '230': '  void (* SlaveRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '231': '  /*!< I2C Slave Rx Transfer completed callback  */', '232': '  void (* ListenCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '233': '  /*!< I2C Listen Complete callback              */', '234': '  void (* MemTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '235': '  /*!< I2C Memory Tx Transfer completed callback */', '236': '  void (* MemRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '237': '  /*!< I2C Memory Rx Transfer completed callback */', '238': '  void (* ErrorCallback)(struct __I2C_HandleTypeDef *hi2c);', '239': '  /*!< I2C Error callback                        */', '240': '  void (* AbortCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '241': '  /*!< I2C Abort callback                        */', '242': '', '243': '  void (* AddrCallback)(struct __I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode);', '244': '  /*!< I2C Slave Address Match callback */', '245': '', '246': '  void (* MspInitCallback)(struct __I2C_HandleTypeDef *hi2c);', '247': '  /*!< I2C Msp Init callback                     */', '248': '  void (* MspDeInitCallback)(struct __I2C_HandleTypeDef *hi2c);', '249': '  /*!< I2C Msp DeInit callback                   */', '250': '', '251': '#endif  /* USE_HAL_I2C_REGISTER_CALLBACKS */', '252': '} I2C_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'I2C_InitTypeDef', 'pBuffPtr': 'unsigned char *', 'XferSize': '__nlink_t', 'XferCount': 'u_short', 'XferOptions': '__timer_t', 'PreviousState': '__fd_mask', 'XferISR': '..(*)(..)', 'hdmatx': '__DMA_HandleTypeDef *', 'hdmarx': '__DMA_HandleTypeDef *', 'Lock': 'HAL_LockTypeDef', 'State': '(unnamed enum)', 'Mode': 'HAL_I2C_ModeTypeDef', 'ErrorCode': '__useconds_t', 'AddrEventCount': '__clock_t', 'Devaddress': '__fd_mask', 'Memaddress': '__clockid_t'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "1cb7bced-32ef-411a-b833-f96c0bdbfebb",
+      "tool_call_id": "call_00_u1x0dCy8tFbWA6S6SVkYk8r7",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the `HAL_I2C_Slave_Receive` function, I can now provide the classification:\n\n## Function Classification: **RECV**\n\n### Reasoning:\n\n1. **Primary Functionality**: This function performs data reception operations in I2C slave mode. Its core purpose is to receive data from an I2C peripheral and store it in the provided buffer.\n\n2. **Key Evidence for RECV Classification**:\n   - **Data Reception**: The function reads data from the I2C peripheral's RXDR register (lines 1627, 1640: `*hi2c->pBuffPtr = (uint8_t)hi2c->Instance->RXDR;`)\n   - **Buffer Management**: It manages a data buffer (`pData` parameter) and transfers data into it\n   - **Peripheral I/O Operations**: Direct access to I2C peripheral registers (CR2, RXDR) for data transfer\n   - **Data Flow**: The function receives `Size` bytes of data and stores them in the `pData` buffer\n\n3. **Peripheral Operations**:\n   - I2C register access (`hi2c->Instance->CR2`, `hi2c->Instance->RXDR`)\n   - I2C flag checking and waiting operations\n   - Data transfer from peripheral to memory buffer\n\n4. **State Management**: The function maintains I2C state machine (`hi2c->State`, `hi2c->Mode`) and manages transfer counters (`XferCount`, `XferSize`)\n\n5. **Non-Driver Logic**: The function contains state management, buffer pointer management, and timeout handling which should be preserved.\n\n### Replacement Strategy:\nSince this is classified as **RECV**, it should use the POSIX-equivalent interface for data reception. The function receives data from an I2C peripheral, so it should be replaced with a suitable HAL_BE function that can simulate I2C data reception.\n\nThe replacement would involve:\n- Removing direct I2C peripheral register access\n- Using `HAL_BE_In` or similar function to simulate data reception\n- Preserving the state management and buffer handling logic\n- Maintaining the function's return status and error handling\n\nThis function is a priority replacement candidate due to its critical data reception functionality.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 474,
+          "prompt_tokens": 14716,
+          "total_tokens": 15190,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 12096
+          },
+          "prompt_cache_hit_tokens": 12096,
+          "prompt_cache_miss_tokens": 2620
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "99a63f39-fb36-4523-b21e-4f5a91c89f3d",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--ffda8179-cc00-47ce-8078-32c65d101d5e-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 14716,
+        "output_tokens": 474,
+        "total_tokens": 15190,
+        "input_token_details": {
+          "cache_read": 12096
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_I2C_Slave_Receive",
+    "function_type": "RECV",
+    "functionality": "Receive data in I2C slave mode by reading from I2C peripheral RXDR register and storing in provided buffer",
+    "classification_reason": "This function performs critical data reception operations from I2C peripheral, reading data from RXDR register and transferring it to memory buffer. It contains direct peripheral I/O operations for data transfer, buffer management, and state machine maintenance, making it a data reception function that requires POSIX-equivalent replacement.",
+    "has_replacement": true,
+    "function_replacement": "/**\n* @brief  Receive in slave mode an amount of data in blocking mode\n* @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains\n*                the configuration information for the specified I2C.\n* @param  pData Pointer to data buffer\n* @param  Size Amount of data to be sent\n* @param  Timeout Timeout duration\n* @retval HAL status\n*/\nHAL_StatusTypeDef HAL_I2C_Slave_Receive(I2C_HandleTypeDef *hi2c, uint8_t *pData, uint16_t Size,\n                                        uint32_t Timeout)\n{\n  uint32_t tickstart;\n\n  if (hi2c->State == HAL_I2C_STATE_READY)\n  {\n    if ((pData == NULL) || (Size == 0U))\n    {\n      hi2c->ErrorCode = HAL_I2C_ERROR_INVALID_PARAM;\n      return  HAL_ERROR;\n    }\n    /* Process Locked */\n    __HAL_LOCK(hi2c);\n\n    /* Init tickstart for timeout management*/\n    tickstart = HAL_GetTick();\n\n    hi2c->State     = HAL_I2C_STATE_BUSY_RX;\n    hi2c->Mode      = HAL_I2C_MODE_SLAVE;\n    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;\n\n    /* Prepare transfer parameters */\n    hi2c->pBuffPtr  = pData;\n    hi2c->XferCount = Size;\n    hi2c->XferSize = hi2c->XferCount;\n    hi2c->XferISR   = NULL;\n\n    /* Replace I2C peripheral data reception with HAL_BE_In */\n    int bytes_received = HAL_BE_In(pData, Size);\n    \n    if (bytes_received < 0)\n    {\n      /* Error in data reception */\n      hi2c->ErrorCode = HAL_I2C_ERROR_DMA;\n      hi2c->State = HAL_I2C_STATE_READY;\n      hi2c->Mode  = HAL_I2C_MODE_NONE;\n      __HAL_UNLOCK(hi2c);\n      return HAL_ERROR;\n    }\n    else if (bytes_received < Size)\n    {\n      /* Partial data received */\n      hi2c->XferCount = bytes_received;\n      hi2c->XferSize = bytes_received;\n    }\n\n    hi2c->State = HAL_I2C_STATE_READY;\n    hi2c->Mode  = HAL_I2C_MODE_NONE;\n\n    /* Process Unlocked */\n    __HAL_UNLOCK(hi2c);\n\n    return HAL_OK;\n  }\n  else\n  {\n    return HAL_BUSY;\n  }\n}"
+  }
+}

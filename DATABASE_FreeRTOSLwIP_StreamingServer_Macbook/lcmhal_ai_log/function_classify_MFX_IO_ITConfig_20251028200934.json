@@ -1,0 +1,248 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "6fb39b59-ba40-433c-82b1-b4d2a9c546be"
+    },
+    {
+      "content": "Classify the function : MFX_IO_ITConfig",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "ac4aa0be-a99f-4f2e-9534-d2ebfba874db"
+    },
+    {
+      "content": "I'll help you classify the function `MFX_IO_ITConfig`. Let me first collect information about this function to understand its functionality and characteristics.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 52,
+          "prompt_tokens": 1744,
+          "total_tokens": 1796,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1728
+          },
+          "prompt_cache_hit_tokens": 1728,
+          "prompt_cache_miss_tokens": 16
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "93d08e71-36ad-42f7-b6df-d1f8d078abad",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--6e005fc6-530d-4629-a598-84212c85e388-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "MFX_IO_ITConfig"
+          },
+          "id": "call_00_hJiAoqQu9CUyRQhKUWeYqRdz",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1744,
+        "output_tokens": 52,
+        "total_tokens": 1796,
+        "input_token_details": {
+          "cache_read": 1728
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', location_line=935, function_content='/**\\n* @brief  Configures MFX low level interrupt.\\n* @retval None\\n*/\\nvoid MFX_IO_ITConfig(void)\\n{\\n  static uint8_t mfx_io_it_enabled = 0;\\n  GPIO_InitTypeDef  gpio_init_structure;\\n  \\n  if(mfx_io_it_enabled == 0)\\n  {\\n    mfx_io_it_enabled = 1;\\n    /* Enable the GPIO EXTI clock */\\n    __HAL_RCC_GPIOI_CLK_ENABLE();\\n    __HAL_RCC_SYSCFG_CLK_ENABLE();\\n    \\n    gpio_init_structure.Pin   = GPIO_PIN_8;\\n    gpio_init_structure.Pull  = GPIO_NOPULL;\\n    gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;\\n    gpio_init_structure.Mode  = GPIO_MODE_IT_RISING;\\n    HAL_GPIO_Init(GPIOI, &gpio_init_structure);\\n    \\n    /* Enable and set GPIO EXTI Interrupt to the lowest priority */\\n    HAL_NVIC_SetPriority((IRQn_Type)(EXTI9_5_IRQn), 0x0F, 0x0F);\\n    HAL_NVIC_EnableIRQ((IRQn_Type)(EXTI9_5_IRQn));\\n  }\\n}\\n', function_content_in_lines={'935': 'void MFX_IO_ITConfig(void)', '936': '{', '937': '  static uint8_t mfx_io_it_enabled = 0;', '938': '  GPIO_InitTypeDef  gpio_init_structure;', '939': '  ', '940': '  if(mfx_io_it_enabled == 0)', '941': '  {', '942': '    mfx_io_it_enabled = 1;', '943': '    /* Enable the GPIO EXTI clock */', '944': '    __HAL_RCC_GPIOI_CLK_ENABLE();', '945': '    __HAL_RCC_SYSCFG_CLK_ENABLE();', '946': '    ', '947': '    gpio_init_structure.Pin   = GPIO_PIN_8;', '948': '    gpio_init_structure.Pull  = GPIO_NOPULL;', '949': '    gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;', '950': '    gpio_init_structure.Mode  = GPIO_MODE_IT_RISING;', '951': '    HAL_GPIO_Init(GPIOI, &gpio_init_structure);', '952': '    ', '953': '    /* Enable and set GPIO EXTI Interrupt to the lowest priority */', '954': '    HAL_NVIC_SetPriority((IRQn_Type)(EXTI9_5_IRQn), 0x0F, 0x0F);', '955': '    HAL_NVIC_EnableIRQ((IRQn_Type)(EXTI9_5_IRQn));', '956': '  }', '957': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "51d07b88-79d2-4d7e-9ede-7920b1051bac",
+      "tool_call_id": "call_00_hJiAoqQu9CUyRQhKUWeYqRdz",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what hardware operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 43,
+          "prompt_tokens": 2594,
+          "total_tokens": 2637,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1792
+          },
+          "prompt_cache_hit_tokens": 1792,
+          "prompt_cache_miss_tokens": 802
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "794625df-0097-4d73-be01-59b4e4a2c1eb",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--1f865248-e1af-461a-b726-9036b67ed199-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "MFX_IO_ITConfig"
+          },
+          "id": "call_00_5FiftVHV3OVI1cnsZYc6SgTJ",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2594,
+        "output_tokens": 43,
+        "total_tokens": 2637,
+        "input_token_details": {
+          "cache_read": 1792
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', location_line=935, function_content='/**\\n* @brief  Configures MFX low level interrupt.\\n* @retval None\\n*/\\nvoid MFX_IO_ITConfig(void)\\n{\\n  static uint8_t mfx_io_it_enabled = 0;\\n  GPIO_InitTypeDef  gpio_init_structure;\\n  \\n  if(mfx_io_it_enabled == 0)\\n  {\\n    mfx_io_it_enabled = 1;\\n    /* Enable the GPIO EXTI clock */\\n    __HAL_RCC_GPIOI_CLK_ENABLE();\\n    __HAL_RCC_SYSCFG_CLK_ENABLE();\\n    \\n    gpio_init_structure.Pin   = GPIO_PIN_8;\\n    gpio_init_structure.Pull  = GPIO_NOPULL;\\n    gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;\\n    gpio_init_structure.Mode  = GPIO_MODE_IT_RISING;\\n    HAL_GPIO_Init(GPIOI, &gpio_init_structure);\\n    \\n    /* Enable and set GPIO EXTI Interrupt to the lowest priority */\\n    HAL_NVIC_SetPriority((IRQn_Type)(EXTI9_5_IRQn), 0x0F, 0x0F);\\n    HAL_NVIC_EnableIRQ((IRQn_Type)(EXTI9_5_IRQn));\\n  }\\n}\\n', function_content_in_lines={'935': 'void MFX_IO_ITConfig(void)', '936': '{', '937': '  static uint8_t mfx_io_it_enabled = 0;', '938': '  GPIO_InitTypeDef  gpio_init_structure;', '939': '  ', '940': '  if(mfx_io_it_enabled == 0)', '941': '  {', '942': '    mfx_io_it_enabled = 1;', '943': '    /* Enable the GPIO EXTI clock */', '944': '    __HAL_RCC_GPIOI_CLK_ENABLE();', '945': '    __HAL_RCC_SYSCFG_CLK_ENABLE();', '946': '    ', '947': '    gpio_init_structure.Pin   = GPIO_PIN_8;', '948': '    gpio_init_structure.Pull  = GPIO_NOPULL;', '949': '    gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;', '950': '    gpio_init_structure.Mode  = GPIO_MODE_IT_RISING;', '951': '    HAL_GPIO_Init(GPIOI, &gpio_init_structure);', '952': '    ', '953': '    /* Enable and set GPIO EXTI Interrupt to the lowest priority */', '954': '    HAL_NVIC_SetPriority((IRQn_Type)(EXTI9_5_IRQn), 0x0F, 0x0F);', '955': '    HAL_NVIC_EnableIRQ((IRQn_Type)(EXTI9_5_IRQn));', '956': '  }', '957': '}'})\nMMIO Exprs info: [MmioExprInfo(name='tmpreg', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=944, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=945, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=950, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=949, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=948, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=947, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='... & ...', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=944, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=945, expr_type='binary', enclosing_type='assign_to')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "7ad0c307-1f40-4cf7-8f74-d828cbc60dc8",
+      "tool_call_id": "call_00_5FiftVHV3OVI1cnsZYc6SgTJ",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 4072,
+          "total_tokens": 4109,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2624
+          },
+          "prompt_cache_hit_tokens": 2624,
+          "prompt_cache_miss_tokens": 1448
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "fab3fb15-1027-45e5-a4f4-84a955f76c8f",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--aa895382-b118-41e7-afec-e7ec595d369b-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "MFX_IO_ITConfig"
+          },
+          "id": "call_00_CjpxtWk97qD7RaVbnM9XMtVO",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4072,
+        "output_tokens": 37,
+        "total_tokens": 4109,
+        "input_token_details": {
+          "cache_read": 2624
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='MFX_IO_ITConfig', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=951, call_type='direct', ret_type='noReturnValue', start_line_content='    HAL_GPIO_Init(GPIOI, &gpio_init_structure);'), FunctionCallInfo(caller_name='MFX_IO_ITConfig', callee_name='HAL_NVIC_EnableIRQ', call_tag='call to HAL_NVIC_EnableIRQ', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=955, call_type='direct', ret_type='noReturnValue', start_line_content='    HAL_NVIC_EnableIRQ((IRQn_Type)(EXTI9_5_IRQn));'), FunctionCallInfo(caller_name='MFX_IO_ITConfig', callee_name='HAL_NVIC_SetPriority', call_tag='call to HAL_NVIC_SetPriority', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=954, call_type='direct', ret_type='noReturnValue', start_line_content='    HAL_NVIC_SetPriority((IRQn_Type)(EXTI9_5_IRQn), 0x0F, 0x0F);')]\nFunction call from info: [FunctionCallInfo(caller_name='mfxstm32l152_Error_EnableIT', callee_name='MFX_IO_ITConfig', call_tag='call to MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.c', start_line=1410, call_type='direct', ret_type='noReturnValue', start_line_content='  MFX_IO_ITConfig();'), FunctionCallInfo(caller_name='mfxstm32l152_IDD_EnableIT', callee_name='MFX_IO_ITConfig', call_tag='call to MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.c', start_line=1336, call_type='direct', ret_type='noReturnValue', start_line_content='  MFX_IO_ITConfig();'), FunctionCallInfo(caller_name='mfxstm32l152_TS_EnableIT', callee_name='MFX_IO_ITConfig', call_tag='call to MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.c', start_line=1108, call_type='direct', ret_type='noReturnValue', start_line_content='  MFX_IO_ITConfig();'), FunctionCallInfo(caller_name='mfxstm32l152_IO_EnableIT', callee_name='MFX_IO_ITConfig', call_tag='call to MFX_IO_ITConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.c', start_line=838, call_type='direct', ret_type='noReturnValue', start_line_content='  MFX_IO_ITConfig();')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "660b2ca4-c568-4f8f-acd2-630e05fdbf3b",
+      "tool_call_id": "call_00_CjpxtWk97qD7RaVbnM9XMtVO",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the `MFX_IO_ITConfig` function, here's my classification:\n\n## Function Classification: **IRQ**\n\n### Reasoning:\n\n1. **Primary Function**: The function is explicitly designed to configure and enable interrupts, as indicated by:\n   - The function name `MFX_IO_ITConfig` (IT = Interrupt)\n   - The comment \"Configures MFX low level interrupt\"\n   - It enables GPIO interrupts and NVIC interrupts\n\n2. **IRQ Operations Identified**:\n   - **GPIO Interrupt Configuration**: Sets up GPIO pin 8 for interrupt on rising edge (`GPIO_MODE_IT_RISING`)\n   - **NVIC Interrupt Configuration**: \n     - `HAL_NVIC_SetPriority()` - Sets interrupt priority\n     - `HAL_NVIC_EnableIRQ()` - Enables the EXTI interrupt\n\n3. **Hardware Operations**:\n   - Clock enables for GPIO and SYSCFG peripherals\n   - GPIO initialization for interrupt mode\n   - Direct interrupt controller (NVIC) operations\n\n4. **State Management**: \n   - Uses a static variable `mfx_io_it_enabled` to ensure one-time initialization\n   - This is a typical pattern for interrupt configuration functions\n\n5. **Call Context**: \n   - Called by multiple MFX component functions (`mfxstm32l152_Error_EnableIT`, `mfxstm32l152_IDD_EnableIT`, `mfxstm32l152_TS_EnableIT`, `mfxstm32l152_IO_EnableIT`)\n   - All callers are interrupt-related enable functions\n\n### Replacement Strategy (IRQ Category):\n- **Preserve interrupt-related logic** but remove actual hardware register access\n- Keep the state management (`mfx_io_it_enabled`) to maintain correct initialization behavior\n- Remove clock enable operations and GPIO hardware configuration\n- Keep the NVIC interrupt enable logic conceptually, but remove hardware-specific implementation\n- Ensure the function maintains its one-time initialization behavior\n\nThis function clearly falls into the **IRQ** category as it's primarily focused on interrupt configuration and enabling, which is a priority replacement function according to the classification rules.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 463,
+          "prompt_tokens": 5002,
+          "total_tokens": 5465,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4096
+          },
+          "prompt_cache_hit_tokens": 4096,
+          "prompt_cache_miss_tokens": 906
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "97cbe788-f0fb-49df-a4cf-5d1f6fc7b5f3",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--120c7a8d-1cd5-487b-9a72-d37b34f29033-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5002,
+        "output_tokens": 463,
+        "total_tokens": 5465,
+        "input_token_details": {
+          "cache_read": 4096
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "MFX_IO_ITConfig",
+    "function_type": "IRQ",
+    "functionality": "Configures MFX low level interrupt by enabling GPIO clock, configuring GPIO pin 8 for interrupt on rising edge, and enabling NVIC interrupt with lowest priority",
+    "classification_reason": "This function is explicitly designed for interrupt configuration and enabling. It performs GPIO interrupt setup (GPIO_MODE_IT_RISING) and NVIC interrupt operations (HAL_NVIC_SetPriority, HAL_NVIC_EnableIRQ). It uses state management to ensure one-time initialization and is called by multiple interrupt enable functions in the MFX component.",
+    "has_replacement": true,
+    "function_replacement": "/**\n* @brief  Configures MFX low level interrupt.\n* @retval None\n*/\nvoid MFX_IO_ITConfig(void)\n{\n  static uint8_t mfx_io_it_enabled = 0;\n  \n  if(mfx_io_it_enabled == 0)\n  {\n    mfx_io_it_enabled = 1;\n    /* GPIO interrupt configuration removed for POSIX compatibility */\n    /* NVIC interrupt enable removed for POSIX compatibility */\n  }\n}"
+  }
+}
