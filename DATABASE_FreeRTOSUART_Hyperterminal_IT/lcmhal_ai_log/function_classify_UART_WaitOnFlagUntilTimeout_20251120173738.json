@@ -1,0 +1,308 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "828592c3-b239-4dce-ae0e-9fff33f88188"
+    },
+    {
+      "content": "Classify the function : UART_WaitOnFlagUntilTimeout",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "e63bb5d4-de3c-4b11-a1f4-3454e10c715e"
+    },
+    {
+      "content": "I'll help you classify the function `UART_WaitOnFlagUntilTimeout`. Let me first collect information about this function using the available tools.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 52,
+          "prompt_tokens": 2025,
+          "total_tokens": 2077,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1984
+          },
+          "prompt_cache_hit_tokens": 1984,
+          "prompt_cache_miss_tokens": 41
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "e6cf5335-9b5c-4aa0-867c-60cf4f2bfbd1",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--104ba5db-5655-4914-83e5-f14934e37940-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "UART_WaitOnFlagUntilTimeout"
+          },
+          "id": "call_00_0arU5dOsZCPCXmRgDhFaenbT",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2025,
+        "output_tokens": 52,
+        "total_tokens": 2077,
+        "input_token_details": {
+          "cache_read": 1984
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='UART_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', location_line=3190, function_content='/**\\n* @brief  This function handles UART Communication Timeout. It waits\\n*                  until a flag is no longer in the specified status.\\n* @param huart     UART handle.\\n* @param Flag      Specifies the UART flag to check\\n* @param Status    The actual Flag status (SET or RESET)\\n* @param Tickstart Tick start value\\n* @param Timeout   Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef UART_WaitOnFlagUntilTimeout(UART_HandleTypeDef *huart, uint32_t Flag, FlagStatus Status,\\n                                              uint32_t Tickstart, uint32_t Timeout)\\n{\\n  /* Wait until flag is set */\\n  while ((__HAL_UART_GET_FLAG(huart, Flag) ? SET : RESET) == Status)\\n  {\\n    /* Check for the Timeout */\\n    if (Timeout != HAL_MAX_DELAY)\\n    {\\n      if (((HAL_GetTick() - Tickstart) > Timeout) || (Timeout == 0U))\\n      {\\n\\n        return HAL_TIMEOUT;\\n      }\\n\\n      if ((READ_BIT(huart->Instance->CR1, USART_CR1_RE) != 0U) && (Flag != UART_FLAG_TXE) && (Flag != UART_FLAG_TC))\\n      {\\n        if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) == SET)\\n        {\\n          /* Clear Overrun Error flag*/\\n          __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF);\\n\\n          /* Blocking error : transfer is aborted\\n          Set the UART state ready to be able to start again the process,\\n          Disable Rx Interrupts if ongoing */\\n          UART_EndRxTransfer(huart);\\n\\n          huart->ErrorCode = HAL_UART_ERROR_ORE;\\n\\n          /* Process Unlocked */\\n          __HAL_UNLOCK(huart);\\n\\n          return HAL_ERROR;\\n        }\\n        if (__HAL_UART_GET_FLAG(huart, UART_FLAG_RTOF) == SET)\\n        {\\n          /* Clear Receiver Timeout flag*/\\n          __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_RTOF);\\n\\n          /* Blocking error : transfer is aborted\\n          Set the UART state ready to be able to start again the process,\\n          Disable Rx Interrupts if ongoing */\\n          UART_EndRxTransfer(huart);\\n\\n          huart->ErrorCode = HAL_UART_ERROR_RTO;\\n\\n          /* Process Unlocked */\\n          __HAL_UNLOCK(huart);\\n\\n          return HAL_TIMEOUT;\\n        }\\n      }\\n    }\\n  }\\n  return HAL_OK;\\n}\\n', function_content_in_lines={'3190': 'HAL_StatusTypeDef UART_WaitOnFlagUntilTimeout(UART_HandleTypeDef *huart, uint32_t Flag, FlagStatus Status,', '3191': '                                              uint32_t Tickstart, uint32_t Timeout)', '3192': '{', '3193': '  /* Wait until flag is set */', '3194': '  while ((__HAL_UART_GET_FLAG(huart, Flag) ? SET : RESET) == Status)', '3195': '  {', '3196': '    /* Check for the Timeout */', '3197': '    if (Timeout != HAL_MAX_DELAY)', '3198': '    {', '3199': '      if (((HAL_GetTick() - Tickstart) > Timeout) || (Timeout == 0U))', '3200': '      {', '3201': '', '3202': '        return HAL_TIMEOUT;', '3203': '      }', '3204': '', '3205': '      if ((READ_BIT(huart->Instance->CR1, USART_CR1_RE) != 0U) && (Flag != UART_FLAG_TXE) && (Flag != UART_FLAG_TC))', '3206': '      {', '3207': '        if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) == SET)', '3208': '        {', '3209': '          /* Clear Overrun Error flag*/', '3210': '          __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF);', '3211': '', '3212': '          /* Blocking error : transfer is aborted', '3213': '          Set the UART state ready to be able to start again the process,', '3214': '          Disable Rx Interrupts if ongoing */', '3215': '          UART_EndRxTransfer(huart);', '3216': '', '3217': '          huart->ErrorCode = HAL_UART_ERROR_ORE;', '3218': '', '3219': '          /* Process Unlocked */', '3220': '          __HAL_UNLOCK(huart);', '3221': '', '3222': '          return HAL_ERROR;', '3223': '        }', '3224': '        if (__HAL_UART_GET_FLAG(huart, UART_FLAG_RTOF) == SET)', '3225': '        {', '3226': '          /* Clear Receiver Timeout flag*/', '3227': '          __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_RTOF);', '3228': '', '3229': '          /* Blocking error : transfer is aborted', '3230': '          Set the UART state ready to be able to start again the process,', '3231': '          Disable Rx Interrupts if ongoing */', '3232': '          UART_EndRxTransfer(huart);', '3233': '', '3234': '          huart->ErrorCode = HAL_UART_ERROR_RTO;', '3235': '', '3236': '          /* Process Unlocked */', '3237': '          __HAL_UNLOCK(huart);', '3238': '', '3239': '          return HAL_TIMEOUT;', '3240': '        }', '3241': '      }', '3242': '    }', '3243': '  }', '3244': '  return HAL_OK;', '3245': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "f6646d44-02e7-4741-b5ec-f8b3135518d9",
+      "tool_call_id": "call_00_0arU5dOsZCPCXmRgDhFaenbT",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 3640,
+          "total_tokens": 3684,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2048
+          },
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 1592
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "323beb5c-47ec-400f-badd-eced5f535d14",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--42a792a2-fc27-48e0-b9a8-fea1c830187d-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "UART_WaitOnFlagUntilTimeout"
+          },
+          "id": "call_00_TzXqg6zEE9sD6IVzJ8A0y9xZ",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3640,
+        "output_tokens": 44,
+        "total_tokens": 3684,
+        "input_token_details": {
+          "cache_read": 2048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO function not found: UART_WaitOnFlagUntilTimeout",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "72804f18-8bcc-4c4f-ad56-aa52e8aceec7",
+      "tool_call_id": "call_00_TzXqg6zEE9sD6IVzJ8A0y9xZ",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 38,
+          "prompt_tokens": 3701,
+          "total_tokens": 3739,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3648
+          },
+          "prompt_cache_hit_tokens": 3648,
+          "prompt_cache_miss_tokens": 53
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "e223a618-ff4e-4303-9d1d-662b2ac7f7f8",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--668b6b0b-3725-45c0-b785-04ac80e187ed-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "UART_WaitOnFlagUntilTimeout"
+          },
+          "id": "call_00_lzpwZSSrSKNCeNl9wccM3xac",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3701,
+        "output_tokens": 38,
+        "total_tokens": 3739,
+        "input_token_details": {
+          "cache_read": 3648
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='UART_WaitOnFlagUntilTimeout', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3199, call_type='direct', ret_type='noReturnValue', start_line_content='      if (((HAL_GetTick() - Tickstart) > Timeout) || (Timeout == 0U))'), FunctionCallInfo(caller_name='UART_WaitOnFlagUntilTimeout', callee_name='UART_EndRxTransfer', call_tag='call to UART_EndRxTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3215, call_type='direct', ret_type='noReturnValue', start_line_content='          UART_EndRxTransfer(huart);'), FunctionCallInfo(caller_name='UART_WaitOnFlagUntilTimeout', callee_name='UART_EndRxTransfer', call_tag='call to UART_EndRxTransfer', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3232, call_type='direct', ret_type='noReturnValue', start_line_content='          UART_EndRxTransfer(huart);')]\nFunction call from info: [FunctionCallInfo(caller_name='UART_CheckIdleState', callee_name='UART_WaitOnFlagUntilTimeout', call_tag='call to UART_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3133, call_type='direct', ret_type='noReturnValue', start_line_content='    if (UART_WaitOnFlagUntilTimeout(huart, USART_ISR_TEACK, RESET, tickstart, HAL_UART_TIMEOUT_VALUE) != HAL_OK)'), FunctionCallInfo(caller_name='UART_CheckIdleState', callee_name='UART_WaitOnFlagUntilTimeout', call_tag='call to UART_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=3152, call_type='direct', ret_type='noReturnValue', start_line_content='    if (UART_WaitOnFlagUntilTimeout(huart, USART_ISR_REACK, RESET, tickstart, HAL_UART_TIMEOUT_VALUE) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_UART_Receive', callee_name='UART_WaitOnFlagUntilTimeout', call_tag='call to UART_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=1219, call_type='direct', ret_type='noReturnValue', start_line_content='      if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_RXNE, RESET, tickstart, Timeout) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_UART_Transmit', callee_name='UART_WaitOnFlagUntilTimeout', call_tag='call to UART_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=1126, call_type='direct', ret_type='noReturnValue', start_line_content='      if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_TXE, RESET, tickstart, Timeout) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_UART_Transmit', callee_name='UART_WaitOnFlagUntilTimeout', call_tag='call to UART_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=1146, call_type='direct', ret_type='noReturnValue', start_line_content='    if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_TC, RESET, tickstart, Timeout) != HAL_OK)')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "a859e505-497f-4fb1-9310-2938c18d3cc5",
+      "tool_call_id": "call_00_lzpwZSSrSKNCeNl9wccM3xac",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check what structs are involved:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 33,
+          "prompt_tokens": 4875,
+          "total_tokens": 4908,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3712
+          },
+          "prompt_cache_hit_tokens": 3712,
+          "prompt_cache_miss_tokens": 1163
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "925402a7-266a-4316-8794-d4c1df89b10a",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--72bf049b-bbbe-4d67-a4e2-10b085f83202-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "UART_HandleTypeDef"
+          },
+          "id": "call_00_Y9GDHBDPIFXiUR25MnMC4YPu",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4875,
+        "output_tokens": 33,
+        "total_tokens": 4908,
+        "input_token_details": {
+          "cache_read": 3712
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='UART_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_uart.h', location_line=211, struct_content='/**\\n* @brief  UART handle Structure definition\\n*/\\ntypedef struct __UART_HandleTypeDef\\n{\\n  USART_TypeDef            *Instance;                /*!< UART registers base address        */\\n\\n  UART_InitTypeDef         Init;                     /*!< UART communication parameters      */\\n\\n  UART_AdvFeatureInitTypeDef AdvancedInit;           /*!< UART Advanced Features initialization parameters */\\n\\n  const uint8_t            *pTxBuffPtr;              /*!< Pointer to UART Tx transfer Buffer */\\n\\n  uint16_t                 TxXferSize;               /*!< UART Tx Transfer size              */\\n\\n  __IO uint16_t            TxXferCount;              /*!< UART Tx Transfer Counter           */\\n\\n  uint8_t                  *pRxBuffPtr;              /*!< Pointer to UART Rx transfer Buffer */\\n\\n  uint16_t                 RxXferSize;               /*!< UART Rx Transfer size              */\\n\\n  __IO uint16_t            RxXferCount;              /*!< UART Rx Transfer Counter           */\\n\\n  uint16_t                 Mask;                     /*!< UART Rx RDR register mask          */\\n\\n  __IO HAL_UART_RxTypeTypeDef ReceptionType;         /*!< Type of ongoing reception          */\\n\\n  __IO HAL_UART_RxEventTypeTypeDef RxEventType;      /*!< Type of Rx Event                   */\\n\\n  void (*RxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Rx IRQ handler */\\n\\n  void (*TxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Tx IRQ handler */\\n\\n  DMA_HandleTypeDef        *hdmatx;                  /*!< UART Tx DMA Handle parameters      */\\n\\n  DMA_HandleTypeDef        *hdmarx;                  /*!< UART Rx DMA Handle parameters      */\\n\\n  HAL_LockTypeDef           Lock;                    /*!< Locking object                     */\\n\\n  __IO HAL_UART_StateTypeDef    gState;              /*!< UART state information related to global Handle management\\n                                                          and also related to Tx operations. This parameter\\n                                                          can be a value of @ref HAL_UART_StateTypeDef */\\n\\n  __IO HAL_UART_StateTypeDef    RxState;             /*!< UART state information related to Rx operations. This\\n                                                          parameter can be a value of @ref HAL_UART_StateTypeDef */\\n\\n  __IO uint32_t                 ErrorCode;           /*!< UART Error code                    */\\n\\n#if (USE_HAL_UART_REGISTER_CALLBACKS == 1)\\n  void (* TxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Tx Half Complete Callback        */\\n  void (* TxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Tx Complete Callback             */\\n  void (* RxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Rx Half Complete Callback        */\\n  void (* RxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Rx Complete Callback             */\\n  void (* ErrorCallback)(struct __UART_HandleTypeDef *huart);             /*!< UART Error Callback                   */\\n  void (* AbortCpltCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Abort Complete Callback          */\\n  void (* AbortTransmitCpltCallback)(struct __UART_HandleTypeDef *huart); /*!< UART Abort Transmit Complete Callback */\\n  void (* AbortReceiveCpltCallback)(struct __UART_HandleTypeDef *huart);  /*!< UART Abort Receive Complete Callback  */\\n#if defined(USART_CR1_UESM)\\n#if defined(USART_CR3_WUFIE)\\n  void (* WakeupCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Wakeup Callback                  */\\n#endif /* USART_CR3_WUFIE */\\n#endif /* USART_CR1_UESM */\\n  void (* RxEventCallback)(struct __UART_HandleTypeDef *huart, uint16_t Pos); /*!< UART Reception Event Callback     */\\n\\n  void (* MspInitCallback)(struct __UART_HandleTypeDef *huart);           /*!< UART Msp Init callback                */\\n  void (* MspDeInitCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Msp DeInit callback              */\\n#endif  /* USE_HAL_UART_REGISTER_CALLBACKS */\\n\\n} UART_HandleTypeDef;\\n', struct_content_in_lines={'211': 'typedef struct __UART_HandleTypeDef', '212': '{', '213': '  USART_TypeDef            *Instance;                /*!< UART registers base address        */', '214': '', '215': '  UART_InitTypeDef         Init;                     /*!< UART communication parameters      */', '216': '', '217': '  UART_AdvFeatureInitTypeDef AdvancedInit;           /*!< UART Advanced Features initialization parameters */', '218': '', '219': '  const uint8_t            *pTxBuffPtr;              /*!< Pointer to UART Tx transfer Buffer */', '220': '', '221': '  uint16_t                 TxXferSize;               /*!< UART Tx Transfer size              */', '222': '', '223': '  __IO uint16_t            TxXferCount;              /*!< UART Tx Transfer Counter           */', '224': '', '225': '  uint8_t                  *pRxBuffPtr;              /*!< Pointer to UART Rx transfer Buffer */', '226': '', '227': '  uint16_t                 RxXferSize;               /*!< UART Rx Transfer size              */', '228': '', '229': '  __IO uint16_t            RxXferCount;              /*!< UART Rx Transfer Counter           */', '230': '', '231': '  uint16_t                 Mask;                     /*!< UART Rx RDR register mask          */', '232': '', '233': '  __IO HAL_UART_RxTypeTypeDef ReceptionType;         /*!< Type of ongoing reception          */', '234': '', '235': '  __IO HAL_UART_RxEventTypeTypeDef RxEventType;      /*!< Type of Rx Event                   */', '236': '', '237': '  void (*RxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Rx IRQ handler */', '238': '', '239': '  void (*TxISR)(struct __UART_HandleTypeDef *huart); /*!< Function pointer on Tx IRQ handler */', '240': '', '241': '  DMA_HandleTypeDef        *hdmatx;                  /*!< UART Tx DMA Handle parameters      */', '242': '', '243': '  DMA_HandleTypeDef        *hdmarx;                  /*!< UART Rx DMA Handle parameters      */', '244': '', '245': '  HAL_LockTypeDef           Lock;                    /*!< Locking object                     */', '246': '', '247': '  __IO HAL_UART_StateTypeDef    gState;              /*!< UART state information related to global Handle management', '248': '                                                          and also related to Tx operations. This parameter', '249': '                                                          can be a value of @ref HAL_UART_StateTypeDef */', '250': '', '251': '  __IO HAL_UART_StateTypeDef    RxState;             /*!< UART state information related to Rx operations. This', '252': '                                                          parameter can be a value of @ref HAL_UART_StateTypeDef */', '253': '', '254': '  __IO uint32_t                 ErrorCode;           /*!< UART Error code                    */', '255': '', '256': '#if (USE_HAL_UART_REGISTER_CALLBACKS == 1)', '257': '  void (* TxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Tx Half Complete Callback        */', '258': '  void (* TxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Tx Complete Callback             */', '259': '  void (* RxHalfCpltCallback)(struct __UART_HandleTypeDef *huart);        /*!< UART Rx Half Complete Callback        */', '260': '  void (* RxCpltCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Rx Complete Callback             */', '261': '  void (* ErrorCallback)(struct __UART_HandleTypeDef *huart);             /*!< UART Error Callback                   */', '262': '  void (* AbortCpltCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Abort Complete Callback          */', '263': '  void (* AbortTransmitCpltCallback)(struct __UART_HandleTypeDef *huart); /*!< UART Abort Transmit Complete Callback */', '264': '  void (* AbortReceiveCpltCallback)(struct __UART_HandleTypeDef *huart);  /*!< UART Abort Receive Complete Callback  */', '265': '#if defined(USART_CR1_UESM)', '266': '#if defined(USART_CR3_WUFIE)', '267': '  void (* WakeupCallback)(struct __UART_HandleTypeDef *huart);            /*!< UART Wakeup Callback                  */', '268': '#endif /* USART_CR3_WUFIE */', '269': '#endif /* USART_CR1_UESM */', '270': '  void (* RxEventCallback)(struct __UART_HandleTypeDef *huart, uint16_t Pos); /*!< UART Reception Event Callback     */', '271': '', '272': '  void (* MspInitCallback)(struct __UART_HandleTypeDef *huart);           /*!< UART Msp Init callback                */', '273': '  void (* MspDeInitCallback)(struct __UART_HandleTypeDef *huart);         /*!< UART Msp DeInit callback              */', '274': '#endif  /* USE_HAL_UART_REGISTER_CALLBACKS */', '275': '', '276': '} UART_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'UART_InitTypeDef', 'AdvancedInit': 'UART_AdvFeatureInitTypeDef', 'pTxBuffPtr': 'unsigned char *', 'TxXferSize': 'ushort', 'TxXferCount': '__ino_t', 'pRxBuffPtr': 'unsigned char *', 'RxXferSize': '__nlink_t', 'RxXferCount': 'UINT16', 'Mask': 'UINT16', 'ReceptionType': '__fd_mask', 'RxEventType': 'ulong', 'RxISR': '..(*)(..)', 'TxISR': '..(*)(..)', 'hdmatx': '__DMA_HandleTypeDef *', 'hdmarx': '__DMA_HandleTypeDef *', 'Lock': 'HAL_LockTypeDef', 'gState': '__fd_mask', 'RxState': 'ulong', 'ErrorCode': 'unsigned long'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "2d80944b-9845-465c-83a1-a3e3846361fc",
+      "tool_call_id": "call_00_Y9GDHBDPIFXiUR25MnMC4YPu",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `UART_WaitOnFlagUntilTimeout`, here is my classification:\n\n## Function Classification: **NEEDCHECK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function implements a timeout-based polling mechanism for UART flags. It waits for a specific UART flag to reach a desired status (SET or RESET) while checking for timeout conditions and handling error cases.\n\n2. **Key Operations Identified**:\n   - **Peripheral Operations**: \n     - Direct UART register access via `__HAL_UART_GET_FLAG(huart, Flag)` \n     - UART flag clearing operations: `__HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF)` and `__HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_RTOF)`\n     - Peripheral register read: `READ_BIT(huart->Instance->CR1, USART_CR1_RE)`\n   \n   - **Non-Driver Logic**:\n     - Timeout management using `HAL_GetTick()`\n     - Error state management: Setting `huart->ErrorCode` for different error conditions\n     - State machine management: Calling `UART_EndRxTransfer(huart)` to clean up transfer state\n     - Lock management: `__HAL_UNLOCK(huart)`\n\n3. **Mixed Functionality**: This function contains a complex mix of:\n   - Peripheral hardware polling operations (driver-dependent)\n   - Program state management (upper-layer logic)\n   - Error handling and state transitions\n   - Resource cleanup operations\n\n4. **Usage Context**: From the call stack, this function is used by critical UART operations like `HAL_UART_Transmit`, `HAL_UART_Receive`, and `UART_CheckIdleState`, indicating it's part of the core UART communication flow.\n\n### Classification Justification:\n- **NOT RECV**: While used in receive operations, this function doesn't directly handle data transmission/reception - it's a polling/status checking function.\n- **NOT IRQ**: No interrupt enable/disable operations or interrupt handler logic.\n- **NOT RETURNOK**: Contains complex state management that affects upper-layer logic.\n- **NOT SKIP**: Critical for proper state management and error handling.\n- **NOT NODRIVER**: Clearly depends on UART peripheral operations.\n\nThe function needs careful analysis to preserve the non-driver logic (state management, error handling, timeout checking) while removing the peripheral polling operations. This makes it a **NEEDCHECK** category function that requires manual review and selective preservation of non-driver logic.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 555,
+          "prompt_tokens": 7644,
+          "total_tokens": 8199,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4864
+          },
+          "prompt_cache_hit_tokens": 4864,
+          "prompt_cache_miss_tokens": 2780
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "f28c3349-9c7c-41d7-a8cb-cefa4dc0a433",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--363943d7-d10e-447d-a638-1678f551f6a2-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 7644,
+        "output_tokens": 555,
+        "total_tokens": 8199,
+        "input_token_details": {
+          "cache_read": 4864
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "UART_WaitOnFlagUntilTimeout",
+    "function_type": "NEEDCHECK",
+    "functionality": "Implements timeout-based polling mechanism for UART flags, waiting for specific flag status while handling timeout conditions and error cases",
+    "classification_reason": "Function contains mixed functionality: peripheral hardware polling operations (UART flag checking/clearing) combined with non-driver logic (timeout management, error state handling, state machine management, and resource cleanup). Used by critical UART operations like transmit/receive, making it important for proper state management but requiring selective preservation of non-driver logic while removing peripheral operations.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

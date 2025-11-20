@@ -1,0 +1,308 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "9d264d62-7b71-4427-b4ae-3774913354b4"
+    },
+    {
+      "content": "Classify the function : HAL_I2C_Master_Receive_DMA",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "b14f4827-0efb-4fa5-a54c-5380af152848"
+    },
+    {
+      "content": "I'll analyze the function `HAL_I2C_Master_Receive_DMA` by collecting information about it from the database. Let me start by getting the function information.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 61,
+          "prompt_tokens": 2027,
+          "total_tokens": 2088,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1984
+          },
+          "prompt_cache_hit_tokens": 1984,
+          "prompt_cache_miss_tokens": 43
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "564d3a38-b118-4bcc-adfd-aeb611679cfa",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--949bf5db-da39-40c6-ba31-2a1e82698624-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_I2C_Master_Receive_DMA"
+          },
+          "id": "call_00_XmH1Ivf2Y2GYmJSgKZm6QMXq",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2027,
+        "output_tokens": 61,
+        "total_tokens": 2088,
+        "input_token_details": {
+          "cache_read": 1984
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2C_Master_Receive_DMA', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=2133, function_content='/**\\n* @brief  Receive in master mode an amount of data in non-blocking mode with DMA\\n* @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains\\n*                the configuration information for the specified I2C.\\n* @param  DevAddress Target device address: The device 7 bits address value\\n*         in datasheet must be shifted to the left before calling the interface\\n* @param  pData Pointer to data buffer\\n* @param  Size Amount of data to be sent\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_I2C_Master_Receive_DMA(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData,\\n                                             uint16_t Size)\\n{\\n  uint32_t xfermode;\\n  HAL_StatusTypeDef dmaxferstatus;\\n\\n  if (hi2c->State == HAL_I2C_STATE_READY)\\n  {\\n    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)\\n    {\\n      return HAL_BUSY;\\n    }\\n\\n    /* Process Locked */\\n    __HAL_LOCK(hi2c);\\n\\n    hi2c->State       = HAL_I2C_STATE_BUSY_RX;\\n    hi2c->Mode        = HAL_I2C_MODE_MASTER;\\n    hi2c->ErrorCode   = HAL_I2C_ERROR_NONE;\\n\\n    /* Prepare transfer parameters */\\n    hi2c->pBuffPtr    = pData;\\n    hi2c->XferCount   = Size;\\n    hi2c->XferOptions = I2C_NO_OPTION_FRAME;\\n    hi2c->XferISR     = I2C_Master_ISR_DMA;\\n\\n    if (hi2c->XferCount > MAX_NBYTE_SIZE)\\n    {\\n      hi2c->XferSize = 1U;\\n      xfermode = I2C_RELOAD_MODE;\\n    }\\n    else\\n    {\\n      hi2c->XferSize = hi2c->XferCount;\\n      xfermode = I2C_AUTOEND_MODE;\\n    }\\n\\n    if (hi2c->XferSize > 0U)\\n    {\\n      if (hi2c->hdmarx != NULL)\\n      {\\n        /* Set the I2C DMA transfer complete callback */\\n        hi2c->hdmarx->XferCpltCallback = I2C_DMAMasterReceiveCplt;\\n\\n        /* Set the DMA error callback */\\n        hi2c->hdmarx->XferErrorCallback = I2C_DMAError;\\n\\n        /* Set the unused DMA callbacks to NULL */\\n        hi2c->hdmarx->XferHalfCpltCallback = NULL;\\n        hi2c->hdmarx->XferAbortCallback = NULL;\\n\\n        /* Enable the DMA stream */\\n        dmaxferstatus = HAL_DMA_Start_IT(hi2c->hdmarx, (uint32_t)&hi2c->Instance->RXDR, (uint32_t)pData,\\n                                         hi2c->XferSize);\\n      }\\n      else\\n      {\\n        /* Update I2C state */\\n        hi2c->State     = HAL_I2C_STATE_READY;\\n        hi2c->Mode      = HAL_I2C_MODE_NONE;\\n\\n        /* Update I2C error code */\\n        hi2c->ErrorCode |= HAL_I2C_ERROR_DMA_PARAM;\\n\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hi2c);\\n\\n        return HAL_ERROR;\\n      }\\n\\n      if (dmaxferstatus == HAL_OK)\\n      {\\n        /* Send Slave Address */\\n        /* Set NBYTES to read and reload if hi2c->XferCount > MAX_NBYTE_SIZE and generate RESTART */\\n        I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, xfermode, I2C_GENERATE_START_READ);\\n\\n        /* Update XferCount value */\\n        hi2c->XferCount -= hi2c->XferSize;\\n\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hi2c);\\n\\n        /* Note : The I2C interrupts must be enabled after unlocking current process\\n                  to avoid the risk of I2C interrupt handle execution before current\\n                  process unlock */\\n        /* Enable ERR and NACK interrupts */\\n        I2C_Enable_IRQ(hi2c, I2C_XFER_ERROR_IT);\\n\\n        /* Enable DMA Request */\\n        hi2c->Instance->CR1 |= I2C_CR1_RXDMAEN;\\n      }\\n      else\\n      {\\n        /* Update I2C state */\\n        hi2c->State     = HAL_I2C_STATE_READY;\\n        hi2c->Mode      = HAL_I2C_MODE_NONE;\\n\\n        /* Update I2C error code */\\n        hi2c->ErrorCode |= HAL_I2C_ERROR_DMA;\\n\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hi2c);\\n\\n        return HAL_ERROR;\\n      }\\n    }\\n    else\\n    {\\n      /* Update Transfer ISR function pointer */\\n      hi2c->XferISR = I2C_Master_ISR_IT;\\n\\n      /* Send Slave Address */\\n      /* Set NBYTES to read and generate START condition */\\n      I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, I2C_AUTOEND_MODE,\\n                         I2C_GENERATE_START_READ);\\n\\n      /* Process Unlocked */\\n      __HAL_UNLOCK(hi2c);\\n\\n      /* Note : The I2C interrupts must be enabled after unlocking current process\\n                to avoid the risk of I2C interrupt handle execution before current\\n                process unlock */\\n      /* Enable ERR, TC, STOP, NACK, RXI interrupt */\\n      /* possible to enable all of these */\\n      /* I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI |\\n        I2C_IT_ADDRI | I2C_IT_RXI | I2C_IT_TXI */\\n      I2C_Enable_IRQ(hi2c, I2C_XFER_RX_IT);\\n    }\\n\\n    return HAL_OK;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'2133': 'HAL_StatusTypeDef HAL_I2C_Master_Receive_DMA(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData,', '2134': '                                             uint16_t Size)', '2135': '{', '2136': '  uint32_t xfermode;', '2137': '  HAL_StatusTypeDef dmaxferstatus;', '2138': '', '2139': '  if (hi2c->State == HAL_I2C_STATE_READY)', '2140': '  {', '2141': '    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)', '2142': '    {', '2143': '      return HAL_BUSY;', '2144': '    }', '2145': '', '2146': '    /* Process Locked */', '2147': '    __HAL_LOCK(hi2c);', '2148': '', '2149': '    hi2c->State       = HAL_I2C_STATE_BUSY_RX;', '2150': '    hi2c->Mode        = HAL_I2C_MODE_MASTER;', '2151': '    hi2c->ErrorCode   = HAL_I2C_ERROR_NONE;', '2152': '', '2153': '    /* Prepare transfer parameters */', '2154': '    hi2c->pBuffPtr    = pData;', '2155': '    hi2c->XferCount   = Size;', '2156': '    hi2c->XferOptions = I2C_NO_OPTION_FRAME;', '2157': '    hi2c->XferISR     = I2C_Master_ISR_DMA;', '2158': '', '2159': '    if (hi2c->XferCount > MAX_NBYTE_SIZE)', '2160': '    {', '2161': '      hi2c->XferSize = 1U;', '2162': '      xfermode = I2C_RELOAD_MODE;', '2163': '    }', '2164': '    else', '2165': '    {', '2166': '      hi2c->XferSize = hi2c->XferCount;', '2167': '      xfermode = I2C_AUTOEND_MODE;', '2168': '    }', '2169': '', '2170': '    if (hi2c->XferSize > 0U)', '2171': '    {', '2172': '      if (hi2c->hdmarx != NULL)', '2173': '      {', '2174': '        /* Set the I2C DMA transfer complete callback */', '2175': '        hi2c->hdmarx->XferCpltCallback = I2C_DMAMasterReceiveCplt;', '2176': '', '2177': '        /* Set the DMA error callback */', '2178': '        hi2c->hdmarx->XferErrorCallback = I2C_DMAError;', '2179': '', '2180': '        /* Set the unused DMA callbacks to NULL */', '2181': '        hi2c->hdmarx->XferHalfCpltCallback = NULL;', '2182': '        hi2c->hdmarx->XferAbortCallback = NULL;', '2183': '', '2184': '        /* Enable the DMA stream */', '2185': '        dmaxferstatus = HAL_DMA_Start_IT(hi2c->hdmarx, (uint32_t)&hi2c->Instance->RXDR, (uint32_t)pData,', '2186': '                                         hi2c->XferSize);', '2187': '      }', '2188': '      else', '2189': '      {', '2190': '        /* Update I2C state */', '2191': '        hi2c->State     = HAL_I2C_STATE_READY;', '2192': '        hi2c->Mode      = HAL_I2C_MODE_NONE;', '2193': '', '2194': '        /* Update I2C error code */', '2195': '        hi2c->ErrorCode |= HAL_I2C_ERROR_DMA_PARAM;', '2196': '', '2197': '        /* Process Unlocked */', '2198': '        __HAL_UNLOCK(hi2c);', '2199': '', '2200': '        return HAL_ERROR;', '2201': '      }', '2202': '', '2203': '      if (dmaxferstatus == HAL_OK)', '2204': '      {', '2205': '        /* Send Slave Address */', '2206': '        /* Set NBYTES to read and reload if hi2c->XferCount > MAX_NBYTE_SIZE and generate RESTART */', '2207': '        I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, xfermode, I2C_GENERATE_START_READ);', '2208': '', '2209': '        /* Update XferCount value */', '2210': '        hi2c->XferCount -= hi2c->XferSize;', '2211': '', '2212': '        /* Process Unlocked */', '2213': '        __HAL_UNLOCK(hi2c);', '2214': '', '2215': '        /* Note : The I2C interrupts must be enabled after unlocking current process', '2216': '                  to avoid the risk of I2C interrupt handle execution before current', '2217': '                  process unlock */', '2218': '        /* Enable ERR and NACK interrupts */', '2219': '        I2C_Enable_IRQ(hi2c, I2C_XFER_ERROR_IT);', '2220': '', '2221': '        /* Enable DMA Request */', '2222': '        hi2c->Instance->CR1 |= I2C_CR1_RXDMAEN;', '2223': '      }', '2224': '      else', '2225': '      {', '2226': '        /* Update I2C state */', '2227': '        hi2c->State     = HAL_I2C_STATE_READY;', '2228': '        hi2c->Mode      = HAL_I2C_MODE_NONE;', '2229': '', '2230': '        /* Update I2C error code */', '2231': '        hi2c->ErrorCode |= HAL_I2C_ERROR_DMA;', '2232': '', '2233': '        /* Process Unlocked */', '2234': '        __HAL_UNLOCK(hi2c);', '2235': '', '2236': '        return HAL_ERROR;', '2237': '      }', '2238': '    }', '2239': '    else', '2240': '    {', '2241': '      /* Update Transfer ISR function pointer */', '2242': '      hi2c->XferISR = I2C_Master_ISR_IT;', '2243': '', '2244': '      /* Send Slave Address */', '2245': '      /* Set NBYTES to read and generate START condition */', '2246': '      I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, I2C_AUTOEND_MODE,', '2247': '                         I2C_GENERATE_START_READ);', '2248': '', '2249': '      /* Process Unlocked */', '2250': '      __HAL_UNLOCK(hi2c);', '2251': '', '2252': '      /* Note : The I2C interrupts must be enabled after unlocking current process', '2253': '                to avoid the risk of I2C interrupt handle execution before current', '2254': '                process unlock */', '2255': '      /* Enable ERR, TC, STOP, NACK, RXI interrupt */', '2256': '      /* possible to enable all of these */', '2257': '      /* I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI |', '2258': '        I2C_IT_ADDRI | I2C_IT_RXI | I2C_IT_TXI */', '2259': '      I2C_Enable_IRQ(hi2c, I2C_XFER_RX_IT);', '2260': '    }', '2261': '', '2262': '    return HAL_OK;', '2263': '  }', '2264': '  else', '2265': '  {', '2266': '    return HAL_BUSY;', '2267': '  }', '2268': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "5f671c40-4ba5-491e-9e8c-f02f60ba4443",
+      "tool_call_id": "call_00_XmH1Ivf2Y2GYmJSgKZm6QMXq",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 47,
+          "prompt_tokens": 5808,
+          "total_tokens": 5855,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2048
+          },
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 3760
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "ad950348-afb8-450f-ad66-c2ee79ac453e",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--5492c2b9-4517-4b79-ab14-bc1afcd8a31c-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_I2C_Master_Receive_DMA"
+          },
+          "id": "call_00_PJwHwEdMAkW3yUPhRL0P7ABj",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5808,
+        "output_tokens": 47,
+        "total_tokens": 5855,
+        "input_token_details": {
+          "cache_read": 2048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO function not found: HAL_I2C_Master_Receive_DMA",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "ad56f007-a475-4ec8-9625-bfaa9ef2fbd8",
+      "tool_call_id": "call_00_PJwHwEdMAkW3yUPhRL0P7ABj",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me check the function call stack to understand what other functions it calls:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 41,
+          "prompt_tokens": 5874,
+          "total_tokens": 5915,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 5824
+          },
+          "prompt_cache_hit_tokens": 5824,
+          "prompt_cache_miss_tokens": 50
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "7809d0ad-6db1-4051-b6b2-fe6205cdcd47",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--b0a8d65b-34bb-4018-8877-3e8f609a86ab-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_I2C_Master_Receive_DMA"
+          },
+          "id": "call_00_Vq3lUPp2sCcZ5bYihP1n2XnN",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5874,
+        "output_tokens": 41,
+        "total_tokens": 5915,
+        "input_token_details": {
+          "cache_read": 5824
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_I2C_Master_Receive_DMA', callee_name='HAL_DMA_Start_IT', call_tag='call to HAL_DMA_Start_IT', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=2185, call_type='direct', ret_type='noReturnValue', start_line_content='        dmaxferstatus = HAL_DMA_Start_IT(hi2c->hdmarx, (uint32_t)&hi2c->Instance->RXDR, (uint32_t)pData,'), FunctionCallInfo(caller_name='HAL_I2C_Master_Receive_DMA', callee_name='HAL_DMA_Start_IT', call_tag='call to HAL_DMA_Start_IT', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=2185, call_type='direct', ret_type='hasReturnValue', start_line_content='        dmaxferstatus = HAL_DMA_Start_IT(hi2c->hdmarx, (uint32_t)&hi2c->Instance->RXDR, (uint32_t)pData,'), FunctionCallInfo(caller_name='HAL_I2C_Master_Receive_DMA', callee_name='I2C_Enable_IRQ', call_tag='call to I2C_Enable_IRQ', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=2219, call_type='direct', ret_type='noReturnValue', start_line_content='        I2C_Enable_IRQ(hi2c, I2C_XFER_ERROR_IT);'), FunctionCallInfo(caller_name='HAL_I2C_Master_Receive_DMA', callee_name='I2C_Enable_IRQ', call_tag='call to I2C_Enable_IRQ', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=2259, call_type='direct', ret_type='noReturnValue', start_line_content='      I2C_Enable_IRQ(hi2c, I2C_XFER_RX_IT);'), FunctionCallInfo(caller_name='HAL_I2C_Master_Receive_DMA', callee_name='I2C_TransferConfig', call_tag='call to I2C_TransferConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=2207, call_type='direct', ret_type='noReturnValue', start_line_content='        I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, xfermode, I2C_GENERATE_START_READ);'), FunctionCallInfo(caller_name='HAL_I2C_Master_Receive_DMA', callee_name='I2C_TransferConfig', call_tag='call to I2C_TransferConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=2246, call_type='direct', ret_type='noReturnValue', start_line_content='      I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, I2C_AUTOEND_MODE,')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "a8a7e451-56dd-45ad-90b1-aa424b129846",
+      "tool_call_id": "call_00_Vq3lUPp2sCcZ5bYihP1n2XnN",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check for any structs or enums used by this function:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 40,
+          "prompt_tokens": 6836,
+          "total_tokens": 6876,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 5888
+          },
+          "prompt_cache_hit_tokens": 5888,
+          "prompt_cache_miss_tokens": 948
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "3731cd43-34db-4461-9165-3fb7ca488034",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--4a19f0df-d220-475c-a99a-d2fa59d267f8-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "I2C_HandleTypeDef"
+          },
+          "id": "call_00_nkDXaLTcDKnzuJZtWN3oSNeQ",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 6836,
+        "output_tokens": 40,
+        "total_tokens": 6876,
+        "input_token_details": {
+          "cache_read": 5888
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='I2C_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c.h', location_line=184, struct_content='/** @defgroup I2C_handle_Structure_definition I2C handle Structure definition\\n* @brief  I2C handle Structure definition\\n* @{\\n*/\\ntypedef struct __I2C_HandleTypeDef\\n{\\n  I2C_TypeDef                *Instance;      /*!< I2C registers base address                */\\n\\n  I2C_InitTypeDef            Init;           /*!< I2C communication parameters              */\\n\\n  uint8_t                    *pBuffPtr;      /*!< Pointer to I2C transfer buffer            */\\n\\n  uint16_t                   XferSize;       /*!< I2C transfer size                         */\\n\\n  __IO uint16_t              XferCount;      /*!< I2C transfer counter                      */\\n\\n  __IO uint32_t              XferOptions;    /*!< I2C sequantial transfer options, this parameter can\\n                                                  be a value of @ref I2C_XFEROPTIONS */\\n\\n  __IO uint32_t              PreviousState;  /*!< I2C communication Previous state          */\\n\\n  HAL_StatusTypeDef(*XferISR)(struct __I2C_HandleTypeDef *hi2c, uint32_t ITFlags, uint32_t ITSources);\\n  /*!< I2C transfer IRQ handler function pointer */\\n\\n  DMA_HandleTypeDef          *hdmatx;        /*!< I2C Tx DMA handle parameters              */\\n\\n  DMA_HandleTypeDef          *hdmarx;        /*!< I2C Rx DMA handle parameters              */\\n\\n\\n  HAL_LockTypeDef            Lock;           /*!< I2C locking object                        */\\n\\n  __IO HAL_I2C_StateTypeDef  State;          /*!< I2C communication state                   */\\n\\n  __IO HAL_I2C_ModeTypeDef   Mode;           /*!< I2C communication mode                    */\\n\\n  __IO uint32_t              ErrorCode;      /*!< I2C Error code                            */\\n\\n  __IO uint32_t              AddrEventCount; /*!< I2C Address Event counter                 */\\n\\n  __IO uint32_t              Devaddress;     /*!< I2C Target device address                 */\\n\\n  __IO uint32_t              Memaddress;     /*!< I2C Target memory address                 */\\n\\n#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)\\n  void (* MasterTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Master Tx Transfer completed callback */\\n  void (* MasterRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Master Rx Transfer completed callback */\\n  void (* SlaveTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Slave Tx Transfer completed callback  */\\n  void (* SlaveRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Slave Rx Transfer completed callback  */\\n  void (* ListenCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Listen Complete callback              */\\n  void (* MemTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Memory Tx Transfer completed callback */\\n  void (* MemRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Memory Rx Transfer completed callback */\\n  void (* ErrorCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Error callback                        */\\n  void (* AbortCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Abort callback                        */\\n\\n  void (* AddrCallback)(struct __I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode);\\n  /*!< I2C Slave Address Match callback */\\n\\n  void (* MspInitCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Msp Init callback                     */\\n  void (* MspDeInitCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Msp DeInit callback                   */\\n\\n#endif  /* USE_HAL_I2C_REGISTER_CALLBACKS */\\n} I2C_HandleTypeDef;\\n', struct_content_in_lines={'184': 'typedef struct __I2C_HandleTypeDef', '185': '{', '186': '  I2C_TypeDef                *Instance;      /*!< I2C registers base address                */', '187': '', '188': '  I2C_InitTypeDef            Init;           /*!< I2C communication parameters              */', '189': '', '190': '  uint8_t                    *pBuffPtr;      /*!< Pointer to I2C transfer buffer            */', '191': '', '192': '  uint16_t                   XferSize;       /*!< I2C transfer size                         */', '193': '', '194': '  __IO uint16_t              XferCount;      /*!< I2C transfer counter                      */', '195': '', '196': '  __IO uint32_t              XferOptions;    /*!< I2C sequantial transfer options, this parameter can', '197': '                                                  be a value of @ref I2C_XFEROPTIONS */', '198': '', '199': '  __IO uint32_t              PreviousState;  /*!< I2C communication Previous state          */', '200': '', '201': '  HAL_StatusTypeDef(*XferISR)(struct __I2C_HandleTypeDef *hi2c, uint32_t ITFlags, uint32_t ITSources);', '202': '  /*!< I2C transfer IRQ handler function pointer */', '203': '', '204': '  DMA_HandleTypeDef          *hdmatx;        /*!< I2C Tx DMA handle parameters              */', '205': '', '206': '  DMA_HandleTypeDef          *hdmarx;        /*!< I2C Rx DMA handle parameters              */', '207': '', '208': '', '209': '  HAL_LockTypeDef            Lock;           /*!< I2C locking object                        */', '210': '', '211': '  __IO HAL_I2C_StateTypeDef  State;          /*!< I2C communication state                   */', '212': '', '213': '  __IO HAL_I2C_ModeTypeDef   Mode;           /*!< I2C communication mode                    */', '214': '', '215': '  __IO uint32_t              ErrorCode;      /*!< I2C Error code                            */', '216': '', '217': '  __IO uint32_t              AddrEventCount; /*!< I2C Address Event counter                 */', '218': '', '219': '  __IO uint32_t              Devaddress;     /*!< I2C Target device address                 */', '220': '', '221': '  __IO uint32_t              Memaddress;     /*!< I2C Target memory address                 */', '222': '', '223': '#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)', '224': '  void (* MasterTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '225': '  /*!< I2C Master Tx Transfer completed callback */', '226': '  void (* MasterRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '227': '  /*!< I2C Master Rx Transfer completed callback */', '228': '  void (* SlaveTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '229': '  /*!< I2C Slave Tx Transfer completed callback  */', '230': '  void (* SlaveRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '231': '  /*!< I2C Slave Rx Transfer completed callback  */', '232': '  void (* ListenCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '233': '  /*!< I2C Listen Complete callback              */', '234': '  void (* MemTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '235': '  /*!< I2C Memory Tx Transfer completed callback */', '236': '  void (* MemRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '237': '  /*!< I2C Memory Rx Transfer completed callback */', '238': '  void (* ErrorCallback)(struct __I2C_HandleTypeDef *hi2c);', '239': '  /*!< I2C Error callback                        */', '240': '  void (* AbortCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '241': '  /*!< I2C Abort callback                        */', '242': '', '243': '  void (* AddrCallback)(struct __I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode);', '244': '  /*!< I2C Slave Address Match callback */', '245': '', '246': '  void (* MspInitCallback)(struct __I2C_HandleTypeDef *hi2c);', '247': '  /*!< I2C Msp Init callback                     */', '248': '  void (* MspDeInitCallback)(struct __I2C_HandleTypeDef *hi2c);', '249': '  /*!< I2C Msp DeInit callback                   */', '250': '', '251': '#endif  /* USE_HAL_I2C_REGISTER_CALLBACKS */', '252': '} I2C_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'I2C_InitTypeDef', 'pBuffPtr': 'unsigned char *', 'XferSize': '__nlink_t', 'XferCount': 'u_short', 'XferOptions': '__timer_t', 'PreviousState': '__fd_mask', 'XferISR': '..(*)(..)', 'hdmatx': '__DMA_HandleTypeDef *', 'hdmarx': '__DMA_HandleTypeDef *', 'Lock': 'HAL_LockTypeDef', 'State': '(unnamed enum)', 'Mode': 'HAL_I2C_ModeTypeDef', 'ErrorCode': '__useconds_t', 'AddrEventCount': '__clock_t', 'Devaddress': '__fd_mask', 'Memaddress': '__clockid_t'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "3dbb25f4-9494-4b1f-b54d-6836577d77c4",
+      "tool_call_id": "call_00_nkDXaLTcDKnzuJZtWN3oSNeQ",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `HAL_I2C_Master_Receive_DMA`, I can now provide the classification:\n\n## Function Classification: **RECV**\n\n### Reasoning:\n\n1. **Primary Function**: This function performs data reception in master mode using DMA (Direct Memory Access). It receives an amount of data in non-blocking mode with DMA, which is a critical data I/O operation.\n\n2. **Key Characteristics**:\n   - **Data Reception**: The function receives data from an I2C slave device into the provided buffer (`pData`)\n   - **DMA Operations**: It uses DMA for efficient data transfer from the I2C peripheral to memory\n   - **Buffer Management**: It manages the receive buffer pointer (`pBuffPtr`) and transfer counters\n   - **Interrupt Operations**: Contains calls to `I2C_Enable_IRQ` for interrupt handling\n\n3. **Critical Operations**:\n   - DMA transfer setup: `HAL_DMA_Start_IT(hi2c->hdmarx, (uint32_t)&hi2c->Instance->RXDR, (uint32_t)pData, hi2c->XferSize)`\n   - I2C transfer configuration for reading data\n   - Interrupt enable operations for error handling and data reception\n\n4. **State Management**: The function manages the I2C state machine, transitioning from `HAL_I2C_STATE_READY` to `HAL_I2C_STATE_BUSY_RX` and handling various error conditions.\n\n5. **Data Flow**: The function is responsible for receiving data from an external I2C device and storing it in the provided buffer, making it a critical data reception function.\n\n### Replacement Strategy:\nSince this is a RECV function, the replacement should:\n- Use `HAL_BE_In(void* buf, int len)` for fixed-size data reception\n- Preserve the state machine logic and error handling\n- Remove actual peripheral register access operations while maintaining the data reception functionality\n- Keep the interrupt-related operations but redirect the actual data reception to POSIX-equivalent interfaces\n\nThe function should be rewritten to use the helper function `HAL_BE_In` for data reception while preserving the state management and error handling logic.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 465,
+          "prompt_tokens": 9460,
+          "total_tokens": 9925,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 6848
+          },
+          "prompt_cache_hit_tokens": 6848,
+          "prompt_cache_miss_tokens": 2612
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "859072c4-6cc1-4827-88c5-35ffa7f17b73",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--5f0f8ae7-ed45-4f3f-89b8-f2e37d0d2f74-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9460,
+        "output_tokens": 465,
+        "total_tokens": 9925,
+        "input_token_details": {
+          "cache_read": 6848
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_I2C_Master_Receive_DMA",
+    "function_type": "RECV",
+    "functionality": "Receive data in master mode using DMA with non-blocking operation, managing I2C state transitions, DMA setup, and interrupt configuration for data reception from I2C slave devices",
+    "classification_reason": "This function performs critical data reception operations using DMA, manages receive buffers, and handles I2C peripheral data transfer. It contains DMA transfer setup, interrupt enable operations, and state machine management for data reception, making it a data reception function that needs to be redirected to POSIX-equivalent interfaces.",
+    "has_replacement": true,
+    "function_replacement": "HAL_StatusTypeDef HAL_I2C_Master_Receive_DMA(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData,\n                                             uint16_t Size)\n{\n  uint32_t xfermode;\n  HAL_StatusTypeDef dmaxferstatus;\n\n  if (hi2c->State == HAL_I2C_STATE_READY)\n  {\n    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)\n    {\n      return HAL_BUSY;\n    }\n\n    /* Process Locked */\n    __HAL_LOCK(hi2c);\n\n    hi2c->State       = HAL_I2C_STATE_BUSY_RX;\n    hi2c->Mode        = HAL_I2C_MODE_MASTER;\n    hi2c->ErrorCode   = HAL_I2C_ERROR_NONE;\n\n    /* Prepare transfer parameters */\n    hi2c->pBuffPtr    = pData;\n    hi2c->XferCount   = Size;\n    hi2c->XferOptions = I2C_NO_OPTION_FRAME;\n    hi2c->XferISR     = I2C_Master_ISR_DMA;\n\n    if (hi2c->XferCount > MAX_NBYTE_SIZE)\n    {\n      hi2c->XferSize = 1U;\n      xfermode = I2C_RELOAD_MODE;\n    }\n    else\n    {\n      hi2c->XferSize = hi2c->XferCount;\n      xfermode = I2C_AUTOEND_MODE;\n    }\n\n    if (hi2c->XferSize > 0U)\n    {\n      if (hi2c->hdmarx != NULL)\n      {\n        /* Set the I2C DMA transfer complete callback */\n        hi2c->hdmarx->XferCpltCallback = I2C_DMAMasterReceiveCplt;\n\n        /* Set the DMA error callback */\n        hi2c->hdmarx->XferErrorCallback = I2C_DMAError;\n\n        /* Set the unused DMA callbacks to NULL */\n        hi2c->hdmarx->XferHalfCpltCallback = NULL;\n        hi2c->hdmarx->XferAbortCallback = NULL;\n\n        /* Replace DMA data reception with HAL_BE_In for fixed-size data */\n        int result = HAL_BE_In(pData, hi2c->XferSize);\n        if (result == hi2c->XferSize)\n        {\n          dmaxferstatus = HAL_OK;\n        }\n        else\n        {\n          dmaxferstatus = HAL_ERROR;\n        }\n      }\n      else\n      {\n        /* Update I2C state */\n        hi2c->State     = HAL_I2C_STATE_READY;\n        hi2c->Mode      = HAL_I2C_MODE_NONE;\n\n        /* Update I2C error code */\n        hi2c->ErrorCode |= HAL_I2C_ERROR_DMA_PARAM;\n\n        /* Process Unlocked */\n        __HAL_UNLOCK(hi2c);\n\n        return HAL_ERROR;\n      }\n\n      if (dmaxferstatus == HAL_OK)\n      {\n        /* Skip actual I2C peripheral configuration */\n        /* I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, xfermode, I2C_GENERATE_START_READ); */\n\n        /* Update XferCount value */\n        hi2c->XferCount -= hi2c->XferSize;\n\n        /* Process Unlocked */\n        __HAL_UNLOCK(hi2c);\n\n        /* Note : The I2C interrupts must be enabled after unlocking current process\n                  to avoid the risk of I2C interrupt handle execution before current\n                  process unlock */\n        /* Enable ERR and NACK interrupts */\n        I2C_Enable_IRQ(hi2c, I2C_XFER_ERROR_IT);\n\n        /* Skip DMA request enable */\n        /* hi2c->Instance->CR1 |= I2C_CR1_RXDMAEN; */\n      }\n      else\n      {\n        /* Update I2C state */\n        hi2c->State     = HAL_I2C_STATE_READY;\n        hi2c->Mode      = HAL_I2C_MODE_NONE;\n\n        /* Update I2C error code */\n        hi2c->ErrorCode |= HAL_I2C_ERROR_DMA;\n\n        /* Process Unlocked */\n        __HAL_UNLOCK(hi2c);\n\n        return HAL_ERROR;\n      }\n    }\n    else\n    {\n      /* Update Transfer ISR function pointer */\n      hi2c->XferISR = I2C_Master_ISR_IT;\n\n      /* Skip actual I2C peripheral configuration */\n      /* I2C_TransferConfig(hi2c, DevAddress, (uint8_t)hi2c->XferSize, I2C_AUTOEND_MODE,\n                         I2C_GENERATE_START_READ); */\n\n      /* Process Unlocked */\n      __HAL_UNLOCK(hi2c);\n\n      /* Note : The I2C interrupts must be enabled after unlocking current process\n                to avoid the risk of I2C interrupt handle execution before current\n                process unlock */\n      /* Enable ERR, TC, STOP, NACK, RXI interrupt */\n      /* possible to enable all of these */\n      /* I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI |\n        I2C_IT_ADDRI | I2C_IT_RXI | I2C_IT_TXI */\n      I2C_Enable_IRQ(hi2c, I2C_XFER_RX_IT);\n    }\n\n    return HAL_OK;\n  }\n  else\n  {\n    return HAL_BUSY;\n  }\n}"
+  }
+}

@@ -1,0 +1,308 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "50096799-de4b-4f8d-963d-4b27af170f00"
+    },
+    {
+      "content": "Classify the function : HAL_I2C_IsDeviceReady",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "dd2fe283-eca9-4e9a-815d-494c09c253cd"
+    },
+    {
+      "content": "I'll analyze the function `HAL_I2C_IsDeviceReady` by collecting information about it from the database.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 48,
+          "prompt_tokens": 2025,
+          "total_tokens": 2073,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1984
+          },
+          "prompt_cache_hit_tokens": 1984,
+          "prompt_cache_miss_tokens": 41
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "285e28e3-a5c7-48fd-abfd-2fc1d7f67f35",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--31c36a23-0a8a-4760-a88c-25bb1edfa1e6-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_I2C_IsDeviceReady"
+          },
+          "id": "call_00_vV7kPljQGJJrs2YW84Te4naN",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2025,
+        "output_tokens": 48,
+        "total_tokens": 2073,
+        "input_token_details": {
+          "cache_read": 1984
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=3263, function_content='/**\\n* @brief  Checks if target device is ready for communication.\\n* @note   This function is used with Memory devices\\n* @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains\\n*                the configuration information for the specified I2C.\\n* @param  DevAddress Target device address: The device 7 bits address value\\n*         in datasheet must be shifted to the left before calling the interface\\n* @param  Trials Number of trials\\n* @param  Timeout Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_I2C_IsDeviceReady(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint32_t Trials,\\n                                        uint32_t Timeout)\\n{\\n  uint32_t tickstart;\\n\\n  __IO uint32_t I2C_Trials = 0UL;\\n\\n  FlagStatus tmp1;\\n  FlagStatus tmp2;\\n\\n  if (hi2c->State == HAL_I2C_STATE_READY)\\n  {\\n    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)\\n    {\\n      return HAL_BUSY;\\n    }\\n\\n    /* Process Locked */\\n    __HAL_LOCK(hi2c);\\n\\n    hi2c->State = HAL_I2C_STATE_BUSY;\\n    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;\\n\\n    do\\n    {\\n      /* Generate Start */\\n      hi2c->Instance->CR2 = I2C_GENERATE_START(hi2c->Init.AddressingMode, DevAddress);\\n\\n      /* No need to Check TC flag, with AUTOEND mode the stop is automatically generated */\\n      /* Wait until STOPF flag is set or a NACK flag is set*/\\n      tickstart = HAL_GetTick();\\n\\n      tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);\\n      tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);\\n\\n      while ((tmp1 == RESET) && (tmp2 == RESET))\\n      {\\n        if (Timeout != HAL_MAX_DELAY)\\n        {\\n          if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))\\n          {\\n            /* Update I2C state */\\n            hi2c->State = HAL_I2C_STATE_READY;\\n\\n            /* Update I2C error code */\\n            hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;\\n\\n            /* Process Unlocked */\\n            __HAL_UNLOCK(hi2c);\\n\\n            return HAL_ERROR;\\n          }\\n        }\\n\\n        tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);\\n        tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);\\n      }\\n\\n      /* Check if the NACKF flag has not been set */\\n      if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) == RESET)\\n      {\\n        /* Wait until STOPF flag is reset */\\n        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)\\n        {\\n          return HAL_ERROR;\\n        }\\n\\n        /* Clear STOP Flag */\\n        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);\\n\\n        /* Device is ready */\\n        hi2c->State = HAL_I2C_STATE_READY;\\n\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hi2c);\\n\\n        return HAL_OK;\\n      }\\n      else\\n      {\\n        /* Wait until STOPF flag is reset */\\n        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)\\n        {\\n          return HAL_ERROR;\\n        }\\n\\n        /* Clear NACK Flag */\\n        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_AF);\\n\\n        /* Clear STOP Flag, auto generated with autoend*/\\n        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);\\n      }\\n\\n      /* Increment Trials */\\n      I2C_Trials++;\\n    } while (I2C_Trials < Trials);\\n\\n    /* Update I2C state */\\n    hi2c->State = HAL_I2C_STATE_READY;\\n\\n    /* Update I2C error code */\\n    hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;\\n\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hi2c);\\n\\n    return HAL_ERROR;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'3263': 'HAL_StatusTypeDef HAL_I2C_IsDeviceReady(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint32_t Trials,', '3264': '                                        uint32_t Timeout)', '3265': '{', '3266': '  uint32_t tickstart;', '3267': '', '3268': '  __IO uint32_t I2C_Trials = 0UL;', '3269': '', '3270': '  FlagStatus tmp1;', '3271': '  FlagStatus tmp2;', '3272': '', '3273': '  if (hi2c->State == HAL_I2C_STATE_READY)', '3274': '  {', '3275': '    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)', '3276': '    {', '3277': '      return HAL_BUSY;', '3278': '    }', '3279': '', '3280': '    /* Process Locked */', '3281': '    __HAL_LOCK(hi2c);', '3282': '', '3283': '    hi2c->State = HAL_I2C_STATE_BUSY;', '3284': '    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;', '3285': '', '3286': '    do', '3287': '    {', '3288': '      /* Generate Start */', '3289': '      hi2c->Instance->CR2 = I2C_GENERATE_START(hi2c->Init.AddressingMode, DevAddress);', '3290': '', '3291': '      /* No need to Check TC flag, with AUTOEND mode the stop is automatically generated */', '3292': '      /* Wait until STOPF flag is set or a NACK flag is set*/', '3293': '      tickstart = HAL_GetTick();', '3294': '', '3295': '      tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);', '3296': '      tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);', '3297': '', '3298': '      while ((tmp1 == RESET) && (tmp2 == RESET))', '3299': '      {', '3300': '        if (Timeout != HAL_MAX_DELAY)', '3301': '        {', '3302': '          if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))', '3303': '          {', '3304': '            /* Update I2C state */', '3305': '            hi2c->State = HAL_I2C_STATE_READY;', '3306': '', '3307': '            /* Update I2C error code */', '3308': '            hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;', '3309': '', '3310': '            /* Process Unlocked */', '3311': '            __HAL_UNLOCK(hi2c);', '3312': '', '3313': '            return HAL_ERROR;', '3314': '          }', '3315': '        }', '3316': '', '3317': '        tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);', '3318': '        tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);', '3319': '      }', '3320': '', '3321': '      /* Check if the NACKF flag has not been set */', '3322': '      if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) == RESET)', '3323': '      {', '3324': '        /* Wait until STOPF flag is reset */', '3325': '        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)', '3326': '        {', '3327': '          return HAL_ERROR;', '3328': '        }', '3329': '', '3330': '        /* Clear STOP Flag */', '3331': '        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);', '3332': '', '3333': '        /* Device is ready */', '3334': '        hi2c->State = HAL_I2C_STATE_READY;', '3335': '', '3336': '        /* Process Unlocked */', '3337': '        __HAL_UNLOCK(hi2c);', '3338': '', '3339': '        return HAL_OK;', '3340': '      }', '3341': '      else', '3342': '      {', '3343': '        /* Wait until STOPF flag is reset */', '3344': '        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)', '3345': '        {', '3346': '          return HAL_ERROR;', '3347': '        }', '3348': '', '3349': '        /* Clear NACK Flag */', '3350': '        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_AF);', '3351': '', '3352': '        /* Clear STOP Flag, auto generated with autoend*/', '3353': '        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);', '3354': '      }', '3355': '', '3356': '      /* Increment Trials */', '3357': '      I2C_Trials++;', '3358': '    } while (I2C_Trials < Trials);', '3359': '', '3360': '    /* Update I2C state */', '3361': '    hi2c->State = HAL_I2C_STATE_READY;', '3362': '', '3363': '    /* Update I2C error code */', '3364': '    hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;', '3365': '', '3366': '    /* Process Unlocked */', '3367': '    __HAL_UNLOCK(hi2c);', '3368': '', '3369': '    return HAL_ERROR;', '3370': '  }', '3371': '  else', '3372': '  {', '3373': '    return HAL_BUSY;', '3374': '  }', '3375': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "cc7d8538-8c6c-4333-bb23-6a38624e242e",
+      "tool_call_id": "call_00_vV7kPljQGJJrs2YW84Te4naN",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO information for this function to understand what peripheral hardware operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 46,
+          "prompt_tokens": 4991,
+          "total_tokens": 5037,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2048
+          },
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 2943
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "a062c09f-943e-47ea-9111-878282570232",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--2da63bb6-9eec-4260-9369-538b1e38b9a0-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_I2C_IsDeviceReady"
+          },
+          "id": "call_00_1x6xH4tCllb8ENwWfCle4RsN",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4991,
+        "output_tokens": 46,
+        "total_tokens": 5037,
+        "input_token_details": {
+          "cache_read": 2048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=3263, function_content='/**\\n* @brief  Checks if target device is ready for communication.\\n* @note   This function is used with Memory devices\\n* @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains\\n*                the configuration information for the specified I2C.\\n* @param  DevAddress Target device address: The device 7 bits address value\\n*         in datasheet must be shifted to the left before calling the interface\\n* @param  Trials Number of trials\\n* @param  Timeout Timeout duration\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_I2C_IsDeviceReady(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint32_t Trials,\\n                                        uint32_t Timeout)\\n{\\n  uint32_t tickstart;\\n\\n  __IO uint32_t I2C_Trials = 0UL;\\n\\n  FlagStatus tmp1;\\n  FlagStatus tmp2;\\n\\n  if (hi2c->State == HAL_I2C_STATE_READY)\\n  {\\n    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)\\n    {\\n      return HAL_BUSY;\\n    }\\n\\n    /* Process Locked */\\n    __HAL_LOCK(hi2c);\\n\\n    hi2c->State = HAL_I2C_STATE_BUSY;\\n    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;\\n\\n    do\\n    {\\n      /* Generate Start */\\n      hi2c->Instance->CR2 = I2C_GENERATE_START(hi2c->Init.AddressingMode, DevAddress);\\n\\n      /* No need to Check TC flag, with AUTOEND mode the stop is automatically generated */\\n      /* Wait until STOPF flag is set or a NACK flag is set*/\\n      tickstart = HAL_GetTick();\\n\\n      tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);\\n      tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);\\n\\n      while ((tmp1 == RESET) && (tmp2 == RESET))\\n      {\\n        if (Timeout != HAL_MAX_DELAY)\\n        {\\n          if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))\\n          {\\n            /* Update I2C state */\\n            hi2c->State = HAL_I2C_STATE_READY;\\n\\n            /* Update I2C error code */\\n            hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;\\n\\n            /* Process Unlocked */\\n            __HAL_UNLOCK(hi2c);\\n\\n            return HAL_ERROR;\\n          }\\n        }\\n\\n        tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);\\n        tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);\\n      }\\n\\n      /* Check if the NACKF flag has not been set */\\n      if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) == RESET)\\n      {\\n        /* Wait until STOPF flag is reset */\\n        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)\\n        {\\n          return HAL_ERROR;\\n        }\\n\\n        /* Clear STOP Flag */\\n        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);\\n\\n        /* Device is ready */\\n        hi2c->State = HAL_I2C_STATE_READY;\\n\\n        /* Process Unlocked */\\n        __HAL_UNLOCK(hi2c);\\n\\n        return HAL_OK;\\n      }\\n      else\\n      {\\n        /* Wait until STOPF flag is reset */\\n        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)\\n        {\\n          return HAL_ERROR;\\n        }\\n\\n        /* Clear NACK Flag */\\n        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_AF);\\n\\n        /* Clear STOP Flag, auto generated with autoend*/\\n        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);\\n      }\\n\\n      /* Increment Trials */\\n      I2C_Trials++;\\n    } while (I2C_Trials < Trials);\\n\\n    /* Update I2C state */\\n    hi2c->State = HAL_I2C_STATE_READY;\\n\\n    /* Update I2C error code */\\n    hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;\\n\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hi2c);\\n\\n    return HAL_ERROR;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'3263': 'HAL_StatusTypeDef HAL_I2C_IsDeviceReady(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint32_t Trials,', '3264': '                                        uint32_t Timeout)', '3265': '{', '3266': '  uint32_t tickstart;', '3267': '', '3268': '  __IO uint32_t I2C_Trials = 0UL;', '3269': '', '3270': '  FlagStatus tmp1;', '3271': '  FlagStatus tmp2;', '3272': '', '3273': '  if (hi2c->State == HAL_I2C_STATE_READY)', '3274': '  {', '3275': '    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)', '3276': '    {', '3277': '      return HAL_BUSY;', '3278': '    }', '3279': '', '3280': '    /* Process Locked */', '3281': '    __HAL_LOCK(hi2c);', '3282': '', '3283': '    hi2c->State = HAL_I2C_STATE_BUSY;', '3284': '    hi2c->ErrorCode = HAL_I2C_ERROR_NONE;', '3285': '', '3286': '    do', '3287': '    {', '3288': '      /* Generate Start */', '3289': '      hi2c->Instance->CR2 = I2C_GENERATE_START(hi2c->Init.AddressingMode, DevAddress);', '3290': '', '3291': '      /* No need to Check TC flag, with AUTOEND mode the stop is automatically generated */', '3292': '      /* Wait until STOPF flag is set or a NACK flag is set*/', '3293': '      tickstart = HAL_GetTick();', '3294': '', '3295': '      tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);', '3296': '      tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);', '3297': '', '3298': '      while ((tmp1 == RESET) && (tmp2 == RESET))', '3299': '      {', '3300': '        if (Timeout != HAL_MAX_DELAY)', '3301': '        {', '3302': '          if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))', '3303': '          {', '3304': '            /* Update I2C state */', '3305': '            hi2c->State = HAL_I2C_STATE_READY;', '3306': '', '3307': '            /* Update I2C error code */', '3308': '            hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;', '3309': '', '3310': '            /* Process Unlocked */', '3311': '            __HAL_UNLOCK(hi2c);', '3312': '', '3313': '            return HAL_ERROR;', '3314': '          }', '3315': '        }', '3316': '', '3317': '        tmp1 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF);', '3318': '        tmp2 = __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF);', '3319': '      }', '3320': '', '3321': '      /* Check if the NACKF flag has not been set */', '3322': '      if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) == RESET)', '3323': '      {', '3324': '        /* Wait until STOPF flag is reset */', '3325': '        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)', '3326': '        {', '3327': '          return HAL_ERROR;', '3328': '        }', '3329': '', '3330': '        /* Clear STOP Flag */', '3331': '        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);', '3332': '', '3333': '        /* Device is ready */', '3334': '        hi2c->State = HAL_I2C_STATE_READY;', '3335': '', '3336': '        /* Process Unlocked */', '3337': '        __HAL_UNLOCK(hi2c);', '3338': '', '3339': '        return HAL_OK;', '3340': '      }', '3341': '      else', '3342': '      {', '3343': '        /* Wait until STOPF flag is reset */', '3344': '        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)', '3345': '        {', '3346': '          return HAL_ERROR;', '3347': '        }', '3348': '', '3349': '        /* Clear NACK Flag */', '3350': '        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_AF);', '3351': '', '3352': '        /* Clear STOP Flag, auto generated with autoend*/', '3353': '        __HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);', '3354': '      }', '3355': '', '3356': '      /* Increment Trials */', '3357': '      I2C_Trials++;', '3358': '    } while (I2C_Trials < Trials);', '3359': '', '3360': '    /* Update I2C state */', '3361': '    hi2c->State = HAL_I2C_STATE_READY;', '3362': '', '3363': '    /* Update I2C error code */', '3364': '    hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;', '3365': '', '3366': '    /* Process Unlocked */', '3367': '    __HAL_UNLOCK(hi2c);', '3368': '', '3369': '    return HAL_ERROR;', '3370': '  }', '3371': '  else', '3372': '  {', '3373': '    return HAL_BUSY;', '3374': '  }', '3375': '}'})\nMMIO Exprs info: [MmioExprInfo(name='DevAddress', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3289, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='~ ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3289, expr_type='unary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3275, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3289, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3295, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3296, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3317, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3318, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3322, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... | ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3289, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3331, expr_type='assign', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3350, expr_type='assign', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3353, expr_type='assign', enclosing_type='skip')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "787d8f7f-db68-4e97-a517-90fe59bb4f56",
+      "tool_call_id": "call_00_1x6xH4tCllb8ENwWfCle4RsN",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 39,
+          "prompt_tokens": 9082,
+          "total_tokens": 9121,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4992
+          },
+          "prompt_cache_hit_tokens": 4992,
+          "prompt_cache_miss_tokens": 4090
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "f3a584b9-3a90-487c-8f51-4de1853207b6",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--4a74acbc-e0dd-4a8d-82d9-a77012cf06d0-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_I2C_IsDeviceReady"
+          },
+          "id": "call_00_uuJIFafOBxVdi0Y9HXt1w3oA",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9082,
+        "output_tokens": 39,
+        "total_tokens": 9121,
+        "input_token_details": {
+          "cache_read": 4992
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_I2C_IsDeviceReady', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3293, call_type='direct', ret_type='noReturnValue', start_line_content='      tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_I2C_IsDeviceReady', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3293, call_type='direct', ret_type='hasReturnValue', start_line_content='      tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='HAL_I2C_IsDeviceReady', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3302, call_type='direct', ret_type='noReturnValue', start_line_content='          if (((HAL_GetTick() - tickstart) > Timeout) || (Timeout == 0U))'), FunctionCallInfo(caller_name='HAL_I2C_IsDeviceReady', callee_name='I2C_WaitOnFlagUntilTimeout', call_tag='call to I2C_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3325, call_type='direct', ret_type='noReturnValue', start_line_content='        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)'), FunctionCallInfo(caller_name='HAL_I2C_IsDeviceReady', callee_name='I2C_WaitOnFlagUntilTimeout', call_tag='call to I2C_WaitOnFlagUntilTimeout', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3344, call_type='direct', ret_type='noReturnValue', start_line_content='        if (I2C_WaitOnFlagUntilTimeout(hi2c, I2C_FLAG_STOPF, RESET, Timeout, tickstart) != HAL_OK)')]\nFunction call from info: [FunctionCallInfo(caller_name='I2Cx_IsDeviceReady', callee_name='HAL_I2C_IsDeviceReady', call_tag='call to HAL_I2C_IsDeviceReady', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', start_line=810, call_type='direct', ret_type='noReturnValue', start_line_content='  return (HAL_I2C_IsDeviceReady(&hEvalI2c, DevAddress, Trials, 1000));')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "ce5911b0-5711-439b-822d-9fb23eae1b16",
+      "tool_call_id": "call_00_uuJIFafOBxVdi0Y9HXt1w3oA",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check what structs and enums are used in this function:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 40,
+          "prompt_tokens": 9955,
+          "total_tokens": 9995,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 9088
+          },
+          "prompt_cache_hit_tokens": 9088,
+          "prompt_cache_miss_tokens": 867
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "635212db-4a9a-452d-b942-1ff57afbeef9",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--deb3bd60-df05-4b90-9136-5708f2350c35-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "I2C_HandleTypeDef"
+          },
+          "id": "call_00_qDd9Q51mhftSm9dS5dwNyMsk",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 9955,
+        "output_tokens": 40,
+        "total_tokens": 9995,
+        "input_token_details": {
+          "cache_read": 9088
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='I2C_HandleTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c.h', location_line=184, struct_content='/** @defgroup I2C_handle_Structure_definition I2C handle Structure definition\\n* @brief  I2C handle Structure definition\\n* @{\\n*/\\ntypedef struct __I2C_HandleTypeDef\\n{\\n  I2C_TypeDef                *Instance;      /*!< I2C registers base address                */\\n\\n  I2C_InitTypeDef            Init;           /*!< I2C communication parameters              */\\n\\n  uint8_t                    *pBuffPtr;      /*!< Pointer to I2C transfer buffer            */\\n\\n  uint16_t                   XferSize;       /*!< I2C transfer size                         */\\n\\n  __IO uint16_t              XferCount;      /*!< I2C transfer counter                      */\\n\\n  __IO uint32_t              XferOptions;    /*!< I2C sequantial transfer options, this parameter can\\n                                                  be a value of @ref I2C_XFEROPTIONS */\\n\\n  __IO uint32_t              PreviousState;  /*!< I2C communication Previous state          */\\n\\n  HAL_StatusTypeDef(*XferISR)(struct __I2C_HandleTypeDef *hi2c, uint32_t ITFlags, uint32_t ITSources);\\n  /*!< I2C transfer IRQ handler function pointer */\\n\\n  DMA_HandleTypeDef          *hdmatx;        /*!< I2C Tx DMA handle parameters              */\\n\\n  DMA_HandleTypeDef          *hdmarx;        /*!< I2C Rx DMA handle parameters              */\\n\\n\\n  HAL_LockTypeDef            Lock;           /*!< I2C locking object                        */\\n\\n  __IO HAL_I2C_StateTypeDef  State;          /*!< I2C communication state                   */\\n\\n  __IO HAL_I2C_ModeTypeDef   Mode;           /*!< I2C communication mode                    */\\n\\n  __IO uint32_t              ErrorCode;      /*!< I2C Error code                            */\\n\\n  __IO uint32_t              AddrEventCount; /*!< I2C Address Event counter                 */\\n\\n  __IO uint32_t              Devaddress;     /*!< I2C Target device address                 */\\n\\n  __IO uint32_t              Memaddress;     /*!< I2C Target memory address                 */\\n\\n#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)\\n  void (* MasterTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Master Tx Transfer completed callback */\\n  void (* MasterRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Master Rx Transfer completed callback */\\n  void (* SlaveTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Slave Tx Transfer completed callback  */\\n  void (* SlaveRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Slave Rx Transfer completed callback  */\\n  void (* ListenCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Listen Complete callback              */\\n  void (* MemTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Memory Tx Transfer completed callback */\\n  void (* MemRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Memory Rx Transfer completed callback */\\n  void (* ErrorCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Error callback                        */\\n  void (* AbortCpltCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Abort callback                        */\\n\\n  void (* AddrCallback)(struct __I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode);\\n  /*!< I2C Slave Address Match callback */\\n\\n  void (* MspInitCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Msp Init callback                     */\\n  void (* MspDeInitCallback)(struct __I2C_HandleTypeDef *hi2c);\\n  /*!< I2C Msp DeInit callback                   */\\n\\n#endif  /* USE_HAL_I2C_REGISTER_CALLBACKS */\\n} I2C_HandleTypeDef;\\n', struct_content_in_lines={'184': 'typedef struct __I2C_HandleTypeDef', '185': '{', '186': '  I2C_TypeDef                *Instance;      /*!< I2C registers base address                */', '187': '', '188': '  I2C_InitTypeDef            Init;           /*!< I2C communication parameters              */', '189': '', '190': '  uint8_t                    *pBuffPtr;      /*!< Pointer to I2C transfer buffer            */', '191': '', '192': '  uint16_t                   XferSize;       /*!< I2C transfer size                         */', '193': '', '194': '  __IO uint16_t              XferCount;      /*!< I2C transfer counter                      */', '195': '', '196': '  __IO uint32_t              XferOptions;    /*!< I2C sequantial transfer options, this parameter can', '197': '                                                  be a value of @ref I2C_XFEROPTIONS */', '198': '', '199': '  __IO uint32_t              PreviousState;  /*!< I2C communication Previous state          */', '200': '', '201': '  HAL_StatusTypeDef(*XferISR)(struct __I2C_HandleTypeDef *hi2c, uint32_t ITFlags, uint32_t ITSources);', '202': '  /*!< I2C transfer IRQ handler function pointer */', '203': '', '204': '  DMA_HandleTypeDef          *hdmatx;        /*!< I2C Tx DMA handle parameters              */', '205': '', '206': '  DMA_HandleTypeDef          *hdmarx;        /*!< I2C Rx DMA handle parameters              */', '207': '', '208': '', '209': '  HAL_LockTypeDef            Lock;           /*!< I2C locking object                        */', '210': '', '211': '  __IO HAL_I2C_StateTypeDef  State;          /*!< I2C communication state                   */', '212': '', '213': '  __IO HAL_I2C_ModeTypeDef   Mode;           /*!< I2C communication mode                    */', '214': '', '215': '  __IO uint32_t              ErrorCode;      /*!< I2C Error code                            */', '216': '', '217': '  __IO uint32_t              AddrEventCount; /*!< I2C Address Event counter                 */', '218': '', '219': '  __IO uint32_t              Devaddress;     /*!< I2C Target device address                 */', '220': '', '221': '  __IO uint32_t              Memaddress;     /*!< I2C Target memory address                 */', '222': '', '223': '#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)', '224': '  void (* MasterTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '225': '  /*!< I2C Master Tx Transfer completed callback */', '226': '  void (* MasterRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '227': '  /*!< I2C Master Rx Transfer completed callback */', '228': '  void (* SlaveTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '229': '  /*!< I2C Slave Tx Transfer completed callback  */', '230': '  void (* SlaveRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '231': '  /*!< I2C Slave Rx Transfer completed callback  */', '232': '  void (* ListenCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '233': '  /*!< I2C Listen Complete callback              */', '234': '  void (* MemTxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '235': '  /*!< I2C Memory Tx Transfer completed callback */', '236': '  void (* MemRxCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '237': '  /*!< I2C Memory Rx Transfer completed callback */', '238': '  void (* ErrorCallback)(struct __I2C_HandleTypeDef *hi2c);', '239': '  /*!< I2C Error callback                        */', '240': '  void (* AbortCpltCallback)(struct __I2C_HandleTypeDef *hi2c);', '241': '  /*!< I2C Abort callback                        */', '242': '', '243': '  void (* AddrCallback)(struct __I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode);', '244': '  /*!< I2C Slave Address Match callback */', '245': '', '246': '  void (* MspInitCallback)(struct __I2C_HandleTypeDef *hi2c);', '247': '  /*!< I2C Msp Init callback                     */', '248': '  void (* MspDeInitCallback)(struct __I2C_HandleTypeDef *hi2c);', '249': '  /*!< I2C Msp DeInit callback                   */', '250': '', '251': '#endif  /* USE_HAL_I2C_REGISTER_CALLBACKS */', '252': '} I2C_HandleTypeDef;'}, members={'Instance': 'struct <unnamed> *', 'Init': 'I2C_InitTypeDef', 'pBuffPtr': 'unsigned char *', 'XferSize': '__nlink_t', 'XferCount': 'u_short', 'XferOptions': '__timer_t', 'PreviousState': '__fd_mask', 'XferISR': '..(*)(..)', 'hdmatx': '__DMA_HandleTypeDef *', 'hdmarx': '__DMA_HandleTypeDef *', 'Lock': 'HAL_LockTypeDef', 'State': '(unnamed enum)', 'Mode': 'HAL_I2C_ModeTypeDef', 'ErrorCode': '__useconds_t', 'AddrEventCount': '__clock_t', 'Devaddress': '__fd_mask', 'Memaddress': '__clockid_t'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "eb202cc3-5b9b-480b-a1ed-e9d80c632d00",
+      "tool_call_id": "call_00_qDd9Q51mhftSm9dS5dwNyMsk",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "## Analysis and Classification\n\nBased on my analysis of the `HAL_I2C_IsDeviceReady` function, here's my classification:\n\n**Function Classification: RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function checks if a target I2C device is ready for communication by attempting to establish communication with it multiple times (specified by the `Trials` parameter).\n\n2. **Key Characteristics**:\n   - It performs peripheral I2C operations (generating start conditions, checking flags, clearing flags)\n   - It manages the I2C state machine (updating `hi2c->State`)\n   - It handles timeout logic using `HAL_GetTick()`\n   - It uses locking mechanisms (`__HAL_LOCK`/`__HAL_UNLOCK`)\n\n3. **Why RETURNOK Category**:\n   - This is a **driver-only functionality function** that performs peripheral operations to check device readiness\n   - It does **not** perform critical data transmission/reception (not RECV category)\n   - It does **not** handle interrupts (not IRQ category) \n   - The function's primary purpose is to verify device availability through peripheral operations\n   - It affects the I2C handle's state but doesn't involve complex data structure operations that would make it NEEDCHECK\n   - The function can safely return a success status without affecting upper-layer data structures\n\n4. **Replacement Strategy**: \n   - Since this is a device readiness check function that performs peripheral operations, the appropriate strategy is to return a success status (`HAL_OK` or equivalent)\n   - This preserves the expected behavior for callers while eliminating the actual hardware dependencies\n\nThe function essentially tries to communicate with an I2C device and returns whether it's ready or not. Since we're eliminating hardware dependencies, we can simply return that the device is ready (success status) to allow the application to proceed normally.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 393,
+          "prompt_tokens": 12579,
+          "total_tokens": 12972,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 9984
+          },
+          "prompt_cache_hit_tokens": 9984,
+          "prompt_cache_miss_tokens": 2595
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "0d67e9d1-46b9-4a43-8ed9-578a01c8ed4d",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--ea4a1196-121c-43d9-a3ae-455d2efd3457-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12579,
+        "output_tokens": 393,
+        "total_tokens": 12972,
+        "input_token_details": {
+          "cache_read": 9984
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_I2C_IsDeviceReady",
+    "function_type": "RETURNOK",
+    "functionality": "Checks if target I2C device is ready for communication by attempting to establish communication multiple times with timeout handling",
+    "classification_reason": "This is a driver-only functionality function that performs peripheral I2C operations to check device readiness. It manages I2C state machine and handles timeout logic but does not perform critical data transmission/reception or interrupt handling. The function can safely return a success status without affecting upper-layer data structures.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

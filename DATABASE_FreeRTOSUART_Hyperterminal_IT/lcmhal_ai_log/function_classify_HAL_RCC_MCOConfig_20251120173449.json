@@ -1,0 +1,248 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "26089332-568d-4b73-aacf-c555b343a879"
+    },
+    {
+      "content": "Classify the function : HAL_RCC_MCOConfig",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "50ca2c3d-9979-4c0a-b12c-1ee3524d9c92"
+    },
+    {
+      "content": "I'll analyze the function `HAL_RCC_MCOConfig` by collecting information about it from the database.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 2023,
+          "total_tokens": 2067,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1984
+          },
+          "prompt_cache_hit_tokens": 1984,
+          "prompt_cache_miss_tokens": 39
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "f14ad85e-42b1-4112-84a7-21ec9adc19f4",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--befe8a66-ebcd-4b7a-9509-27288cda53b1-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_RCC_MCOConfig"
+          },
+          "id": "call_00_s8AJAkNiVUMdRlvfgUVcflMW",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2023,
+        "output_tokens": 44,
+        "total_tokens": 2067,
+        "input_token_details": {
+          "cache_read": 1984
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', location_line=903, function_content='/**\\n* @brief  Selects the clock source to output on MCO1 pin(PA8) or on MCO2 pin(PC9).\\n* @note   PA8/PC9 should be configured in alternate function mode.\\n* @param  RCC_MCOx specifies the output direction for the clock source.\\n*          This parameter can be one of the following values:\\n*            @arg RCC_MCO1: Clock source to output on MCO1 pin(PA8).\\n*            @arg RCC_MCO2: Clock source to output on MCO2 pin(PC9).\\n* @param  RCC_MCOSource specifies the clock source to output.\\n*          This parameter can be one of the following values:\\n*            @arg RCC_MCO1SOURCE_HSI: HSI clock selected as MCO1 source\\n*            @arg RCC_MCO1SOURCE_LSE: LSE clock selected as MCO1 source\\n*            @arg RCC_MCO1SOURCE_HSE: HSE clock selected as MCO1 source\\n*            @arg RCC_MCO1SOURCE_PLLCLK: main PLL clock selected as MCO1 source\\n*            @arg RCC_MCO2SOURCE_SYSCLK: System clock (SYSCLK) selected as MCO2 source\\n*            @arg RCC_MCO2SOURCE_PLLI2SCLK: PLLI2S clock selected as MCO2 source\\n*            @arg RCC_MCO2SOURCE_HSE: HSE clock selected as MCO2 source\\n*            @arg RCC_MCO2SOURCE_PLLCLK: main PLL clock selected as MCO2 source\\n* @param  RCC_MCODiv specifies the MCOx prescaler.\\n*          This parameter can be one of the following values:\\n*            @arg RCC_MCODIV_1: no division applied to MCOx clock\\n*            @arg RCC_MCODIV_2: division by 2 applied to MCOx clock\\n*            @arg RCC_MCODIV_3: division by 3 applied to MCOx clock\\n*            @arg RCC_MCODIV_4: division by 4 applied to MCOx clock\\n*            @arg RCC_MCODIV_5: division by 5 applied to MCOx clock\\n* @retval None\\n*/\\nvoid HAL_RCC_MCOConfig(uint32_t RCC_MCOx, uint32_t RCC_MCOSource, uint32_t RCC_MCODiv)\\n{\\n  GPIO_InitTypeDef GPIO_InitStruct;\\n  /* Check the parameters */\\n  assert_param(IS_RCC_MCO(RCC_MCOx));\\n  assert_param(IS_RCC_MCODIV(RCC_MCODiv));\\n  /* RCC_MCO1 */\\n  if (RCC_MCOx == RCC_MCO1)\\n  {\\n    assert_param(IS_RCC_MCO1SOURCE(RCC_MCOSource));\\n\\n    /* MCO1 Clock Enable */\\n    MCO1_CLK_ENABLE();\\n\\n    /* Configure the MCO1 pin in alternate function mode */\\n    GPIO_InitStruct.Pin = MCO1_PIN;\\n    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;\\n    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;\\n    GPIO_InitStruct.Pull = GPIO_NOPULL;\\n    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;\\n    HAL_GPIO_Init(MCO1_GPIO_PORT, &GPIO_InitStruct);\\n\\n    /* Mask MCO1 and MCO1PRE[2:0] bits then Select MCO1 clock source and prescaler */\\n    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO1 | RCC_CFGR_MCO1PRE), (RCC_MCOSource | RCC_MCODiv));\\n  }\\n  else\\n  {\\n    assert_param(IS_RCC_MCO2SOURCE(RCC_MCOSource));\\n\\n    /* MCO2 Clock Enable */\\n    MCO2_CLK_ENABLE();\\n\\n    /* Configure the MCO2 pin in alternate function mode */\\n    GPIO_InitStruct.Pin = MCO2_PIN;\\n    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;\\n    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;\\n    GPIO_InitStruct.Pull = GPIO_NOPULL;\\n    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;\\n    HAL_GPIO_Init(MCO2_GPIO_PORT, &GPIO_InitStruct);\\n\\n    /* Mask MCO2 and MCO2PRE[2:0] bits then Select MCO2 clock source and prescaler */\\n    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO2 | RCC_CFGR_MCO2PRE), (RCC_MCOSource | (RCC_MCODiv << 3)));\\n  }\\n}\\n', function_content_in_lines={'903': 'void HAL_RCC_MCOConfig(uint32_t RCC_MCOx, uint32_t RCC_MCOSource, uint32_t RCC_MCODiv)', '904': '{', '905': '  GPIO_InitTypeDef GPIO_InitStruct;', '906': '  /* Check the parameters */', '907': '  assert_param(IS_RCC_MCO(RCC_MCOx));', '908': '  assert_param(IS_RCC_MCODIV(RCC_MCODiv));', '909': '  /* RCC_MCO1 */', '910': '  if (RCC_MCOx == RCC_MCO1)', '911': '  {', '912': '    assert_param(IS_RCC_MCO1SOURCE(RCC_MCOSource));', '913': '', '914': '    /* MCO1 Clock Enable */', '915': '    MCO1_CLK_ENABLE();', '916': '', '917': '    /* Configure the MCO1 pin in alternate function mode */', '918': '    GPIO_InitStruct.Pin = MCO1_PIN;', '919': '    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;', '920': '    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;', '921': '    GPIO_InitStruct.Pull = GPIO_NOPULL;', '922': '    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;', '923': '    HAL_GPIO_Init(MCO1_GPIO_PORT, &GPIO_InitStruct);', '924': '', '925': '    /* Mask MCO1 and MCO1PRE[2:0] bits then Select MCO1 clock source and prescaler */', '926': '    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO1 | RCC_CFGR_MCO1PRE), (RCC_MCOSource | RCC_MCODiv));', '927': '  }', '928': '  else', '929': '  {', '930': '    assert_param(IS_RCC_MCO2SOURCE(RCC_MCOSource));', '931': '', '932': '    /* MCO2 Clock Enable */', '933': '    MCO2_CLK_ENABLE();', '934': '', '935': '    /* Configure the MCO2 pin in alternate function mode */', '936': '    GPIO_InitStruct.Pin = MCO2_PIN;', '937': '    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;', '938': '    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;', '939': '    GPIO_InitStruct.Pull = GPIO_NOPULL;', '940': '    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;', '941': '    HAL_GPIO_Init(MCO2_GPIO_PORT, &GPIO_InitStruct);', '942': '', '943': '    /* Mask MCO2 and MCO2PRE[2:0] bits then Select MCO2 clock source and prescaler */', '944': '    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO2 | RCC_CFGR_MCO2PRE), (RCC_MCOSource | (RCC_MCODiv << 3)));', '945': '  }', '946': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "9383a075-f66d-4473-8bb0-94271bf27244",
+      "tool_call_id": "call_00_s8AJAkNiVUMdRlvfgUVcflMW",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the MMIO expressions used by this function:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 4045,
+          "total_tokens": 4082,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2048
+          },
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 1997
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "9e7ae2cc-11c3-4a90-9092-e6308af21490",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--11e6b107-e197-445c-bdbd-cf0087b4b948-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_RCC_MCOConfig"
+          },
+          "id": "call_00_PQn2HOKspeEmrHei2oKdIDfj",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4045,
+        "output_tokens": 37,
+        "total_tokens": 4082,
+        "input_token_details": {
+          "cache_read": 2048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', location_line=903, function_content='/**\\n* @brief  Selects the clock source to output on MCO1 pin(PA8) or on MCO2 pin(PC9).\\n* @note   PA8/PC9 should be configured in alternate function mode.\\n* @param  RCC_MCOx specifies the output direction for the clock source.\\n*          This parameter can be one of the following values:\\n*            @arg RCC_MCO1: Clock source to output on MCO1 pin(PA8).\\n*            @arg RCC_MCO2: Clock source to output on MCO2 pin(PC9).\\n* @param  RCC_MCOSource specifies the clock source to output.\\n*          This parameter can be one of the following values:\\n*            @arg RCC_MCO1SOURCE_HSI: HSI clock selected as MCO1 source\\n*            @arg RCC_MCO1SOURCE_LSE: LSE clock selected as MCO1 source\\n*            @arg RCC_MCO1SOURCE_HSE: HSE clock selected as MCO1 source\\n*            @arg RCC_MCO1SOURCE_PLLCLK: main PLL clock selected as MCO1 source\\n*            @arg RCC_MCO2SOURCE_SYSCLK: System clock (SYSCLK) selected as MCO2 source\\n*            @arg RCC_MCO2SOURCE_PLLI2SCLK: PLLI2S clock selected as MCO2 source\\n*            @arg RCC_MCO2SOURCE_HSE: HSE clock selected as MCO2 source\\n*            @arg RCC_MCO2SOURCE_PLLCLK: main PLL clock selected as MCO2 source\\n* @param  RCC_MCODiv specifies the MCOx prescaler.\\n*          This parameter can be one of the following values:\\n*            @arg RCC_MCODIV_1: no division applied to MCOx clock\\n*            @arg RCC_MCODIV_2: division by 2 applied to MCOx clock\\n*            @arg RCC_MCODIV_3: division by 3 applied to MCOx clock\\n*            @arg RCC_MCODIV_4: division by 4 applied to MCOx clock\\n*            @arg RCC_MCODIV_5: division by 5 applied to MCOx clock\\n* @retval None\\n*/\\nvoid HAL_RCC_MCOConfig(uint32_t RCC_MCOx, uint32_t RCC_MCOSource, uint32_t RCC_MCODiv)\\n{\\n  GPIO_InitTypeDef GPIO_InitStruct;\\n  /* Check the parameters */\\n  assert_param(IS_RCC_MCO(RCC_MCOx));\\n  assert_param(IS_RCC_MCODIV(RCC_MCODiv));\\n  /* RCC_MCO1 */\\n  if (RCC_MCOx == RCC_MCO1)\\n  {\\n    assert_param(IS_RCC_MCO1SOURCE(RCC_MCOSource));\\n\\n    /* MCO1 Clock Enable */\\n    MCO1_CLK_ENABLE();\\n\\n    /* Configure the MCO1 pin in alternate function mode */\\n    GPIO_InitStruct.Pin = MCO1_PIN;\\n    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;\\n    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;\\n    GPIO_InitStruct.Pull = GPIO_NOPULL;\\n    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;\\n    HAL_GPIO_Init(MCO1_GPIO_PORT, &GPIO_InitStruct);\\n\\n    /* Mask MCO1 and MCO1PRE[2:0] bits then Select MCO1 clock source and prescaler */\\n    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO1 | RCC_CFGR_MCO1PRE), (RCC_MCOSource | RCC_MCODiv));\\n  }\\n  else\\n  {\\n    assert_param(IS_RCC_MCO2SOURCE(RCC_MCOSource));\\n\\n    /* MCO2 Clock Enable */\\n    MCO2_CLK_ENABLE();\\n\\n    /* Configure the MCO2 pin in alternate function mode */\\n    GPIO_InitStruct.Pin = MCO2_PIN;\\n    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;\\n    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;\\n    GPIO_InitStruct.Pull = GPIO_NOPULL;\\n    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;\\n    HAL_GPIO_Init(MCO2_GPIO_PORT, &GPIO_InitStruct);\\n\\n    /* Mask MCO2 and MCO2PRE[2:0] bits then Select MCO2 clock source and prescaler */\\n    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO2 | RCC_CFGR_MCO2PRE), (RCC_MCOSource | (RCC_MCODiv << 3)));\\n  }\\n}\\n', function_content_in_lines={'903': 'void HAL_RCC_MCOConfig(uint32_t RCC_MCOx, uint32_t RCC_MCOSource, uint32_t RCC_MCODiv)', '904': '{', '905': '  GPIO_InitTypeDef GPIO_InitStruct;', '906': '  /* Check the parameters */', '907': '  assert_param(IS_RCC_MCO(RCC_MCOx));', '908': '  assert_param(IS_RCC_MCODIV(RCC_MCODiv));', '909': '  /* RCC_MCO1 */', '910': '  if (RCC_MCOx == RCC_MCO1)', '911': '  {', '912': '    assert_param(IS_RCC_MCO1SOURCE(RCC_MCOSource));', '913': '', '914': '    /* MCO1 Clock Enable */', '915': '    MCO1_CLK_ENABLE();', '916': '', '917': '    /* Configure the MCO1 pin in alternate function mode */', '918': '    GPIO_InitStruct.Pin = MCO1_PIN;', '919': '    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;', '920': '    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;', '921': '    GPIO_InitStruct.Pull = GPIO_NOPULL;', '922': '    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;', '923': '    HAL_GPIO_Init(MCO1_GPIO_PORT, &GPIO_InitStruct);', '924': '', '925': '    /* Mask MCO1 and MCO1PRE[2:0] bits then Select MCO1 clock source and prescaler */', '926': '    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO1 | RCC_CFGR_MCO1PRE), (RCC_MCOSource | RCC_MCODiv));', '927': '  }', '928': '  else', '929': '  {', '930': '    assert_param(IS_RCC_MCO2SOURCE(RCC_MCOSource));', '931': '', '932': '    /* MCO2 Clock Enable */', '933': '    MCO2_CLK_ENABLE();', '934': '', '935': '    /* Configure the MCO2 pin in alternate function mode */', '936': '    GPIO_InitStruct.Pin = MCO2_PIN;', '937': '    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;', '938': '    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;', '939': '    GPIO_InitStruct.Pull = GPIO_NOPULL;', '940': '    GPIO_InitStruct.Alternate = GPIO_AF0_MCO;', '941': '    HAL_GPIO_Init(MCO2_GPIO_PORT, &GPIO_InitStruct);', '942': '', '943': '    /* Mask MCO2 and MCO2PRE[2:0] bits then Select MCO2 clock source and prescaler */', '944': '    MODIFY_REG(RCC->CFGR, (RCC_CFGR_MCO2 | RCC_CFGR_MCO2PRE), (RCC_MCOSource | (RCC_MCODiv << 3)));', '945': '  }', '946': '}'})\nMMIO Exprs info: [MmioExprInfo(name='tmpreg', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=915, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='tmpreg', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=933, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=919, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Mode', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=937, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='CFGR', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='CFGR', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RCC_MCOSource', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RCC_MCOSource', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RCC_MCODiv', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='RCC_MCODiv', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='Alternate', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=922, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Alternate', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=940, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=920, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Speed', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=938, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=921, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pull', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=939, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=918, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='Pin', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=936, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='~ ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='unary', enclosing_type='skip'), MmioExprInfo(name='~ ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='unary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=915, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=933, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... & ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... | ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... | ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... << ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... = ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=926, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... = ...', function='HAL_RCC_MCOConfig', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=944, expr_type='assign', enclosing_type='stmt')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "558f8506-fe2b-43a2-a715-26905aca5c67",
+      "tool_call_id": "call_00_PQn2HOKspeEmrHei2oKdIDfj",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 8465,
+          "total_tokens": 8502,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4032
+          },
+          "prompt_cache_hit_tokens": 4032,
+          "prompt_cache_miss_tokens": 4433
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "d0282f25-ea6a-4875-a452-47a25a16ba57",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--4f5ee3ef-2703-48e5-8029-75d41e20784a-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_RCC_MCOConfig"
+          },
+          "id": "call_00_RbrSzXapzNpojOGyzvf94X6z",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 8465,
+        "output_tokens": 37,
+        "total_tokens": 8502,
+        "input_token_details": {
+          "cache_read": 4032
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_RCC_MCOConfig', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=923, call_type='direct', ret_type='noReturnValue', start_line_content='    HAL_GPIO_Init(MCO1_GPIO_PORT, &GPIO_InitStruct);'), FunctionCallInfo(caller_name='HAL_RCC_MCOConfig', callee_name='HAL_GPIO_Init', call_tag='call to HAL_GPIO_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', start_line=941, call_type='direct', ret_type='noReturnValue', start_line_content='    HAL_GPIO_Init(MCO2_GPIO_PORT, &GPIO_InitStruct);')]\nFunction call from info: []",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "5b4a433a-ec55-4b45-a7d7-5eebffc4fc06",
+      "tool_call_id": "call_00_RbrSzXapzNpojOGyzvf94X6z",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `HAL_RCC_MCOConfig`, I can now provide the classification:\n\n## Function Classification: **RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function configures the MCO (Microcontroller Clock Output) pins to output specific clock sources. It selects which clock source to output on either MCO1 pin (PA8) or MCO2 pin (PC9) with configurable prescaler settings.\n\n2. **Analysis of Function Content**:\n   - The function performs parameter validation using `assert_param` macros\n   - It configures GPIO pins for alternate function mode using `HAL_GPIO_Init`\n   - It performs direct register access to RCC->CFGR register using `MODIFY_REG` macro\n   - It enables clock for MCO pins using `MCO1_CLK_ENABLE()` and `MCO2_CLK_ENABLE()`\n\n3. **MMIO Operations**: \n   - Direct peripheral register access to `RCC->CFGR` \n   - GPIO configuration operations\n   - Clock enable operations\n\n4. **Category Determination**:\n   - **NOT RECV**: This function does not perform any data reception or transmission operations\n   - **NOT IRQ**: This function does not handle interrupts or enable interrupt operations\n   - **NOT INIT**: While it configures hardware, it's not an initialization function in the traditional sense\n   - **RETURNOK**: This function only performs driver/peripheral operations (clock output configuration) and does not affect upper-layer data structures. The functionality is purely hardware-specific and can be safely replaced with a no-op that returns success.\n\n5. **Replacement Strategy**: Since this function only performs driver-specific clock output configuration and doesn't affect application-level data structures or logic, it can be safely replaced with an empty implementation that maintains the function signature but removes all hardware-specific operations.\n\nThe function's purpose is to configure hardware clock outputs, which is not essential for the application's core functionality when running in a POSIX environment, making it suitable for the RETURNOK category.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 428,
+          "prompt_tokens": 8778,
+          "total_tokens": 9206,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 8448
+          },
+          "prompt_cache_hit_tokens": 8448,
+          "prompt_cache_miss_tokens": 330
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "f61ebbd8-9376-462a-bebf-512d7d9bf362",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--2d34af20-cee6-4f6e-a6ec-4336d121f743-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 8778,
+        "output_tokens": 428,
+        "total_tokens": 9206,
+        "input_token_details": {
+          "cache_read": 8448
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_RCC_MCOConfig",
+    "function_type": "RETURNOK",
+    "functionality": "Configures MCO (Microcontroller Clock Output) pins to output specific clock sources with configurable prescaler settings",
+    "classification_reason": "This function performs pure driver/peripheral operations for clock output configuration without affecting upper-layer data structures. It only configures hardware-specific clock output functionality through register access and GPIO configuration, making it suitable for RETURNOK category where the hardware operations can be safely removed.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

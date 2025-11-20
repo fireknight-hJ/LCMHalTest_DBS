@@ -1,0 +1,308 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "972f0d9a-3e9e-495b-9d76-b28767da7387"
+    },
+    {
+      "content": "Classify the function : I2C_DMAAbort",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "3c9ce2b5-f32e-415b-947c-384ccd372ec4"
+    },
+    {
+      "content": "I'll help you classify the function `I2C_DMAAbort`. Let me first collect information about this function using the available tools.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 52,
+          "prompt_tokens": 2025,
+          "total_tokens": 2077,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1984
+          },
+          "prompt_cache_hit_tokens": 1984,
+          "prompt_cache_miss_tokens": 41
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "7a6704a9-5833-483b-90b5-da20cbcdcf1b",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--72fcb05e-7c8f-4779-91aa-01d0ff8b2262-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "I2C_DMAAbort"
+          },
+          "id": "call_00_ACJtHr1pNi0wWI4rrh0N0zqK",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2025,
+        "output_tokens": 52,
+        "total_tokens": 2077,
+        "input_token_details": {
+          "cache_read": 1984
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='I2C_DMAAbort', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=6987, function_content='/**\\n* @brief DMA I2C communication abort callback\\n*        (To be called at end of DMA Abort procedure).\\n* @param hdma DMA handle.\\n* @retval None\\n*/\\nstatic void I2C_DMAAbort(DMA_HandleTypeDef *hdma)\\n{\\n  /* Derogation MISRAC2012-Rule-11.5 */\\n  I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)(((DMA_HandleTypeDef *)hdma)->Parent);\\n\\n  /* Reset AbortCpltCallback */\\n  if (hi2c->hdmatx != NULL)\\n  {\\n    hi2c->hdmatx->XferAbortCallback = NULL;\\n  }\\n  if (hi2c->hdmarx != NULL)\\n  {\\n    hi2c->hdmarx->XferAbortCallback = NULL;\\n  }\\n\\n  I2C_TreatErrorCallback(hi2c);\\n}\\n', function_content_in_lines={'6987': 'static void I2C_DMAAbort(DMA_HandleTypeDef *hdma)', '6988': '{', '6989': '  /* Derogation MISRAC2012-Rule-11.5 */', '6990': '  I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)(((DMA_HandleTypeDef *)hdma)->Parent);', '6991': '', '6992': '  /* Reset AbortCpltCallback */', '6993': '  if (hi2c->hdmatx != NULL)', '6994': '  {', '6995': '    hi2c->hdmatx->XferAbortCallback = NULL;', '6996': '  }', '6997': '  if (hi2c->hdmarx != NULL)', '6998': '  {', '6999': '    hi2c->hdmarx->XferAbortCallback = NULL;', '7000': '  }', '7001': '', '7002': '  I2C_TreatErrorCallback(hi2c);', '7003': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "0a487026-3415-4142-9e6a-81f7bb63a4e5",
+      "tool_call_id": "call_00_ACJtHr1pNi0wWI4rrh0N0zqK",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check if this function uses any MMIO operations:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 38,
+          "prompt_tokens": 2654,
+          "total_tokens": 2692,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2048
+          },
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 606
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "065ab8c3-8437-400c-b88f-dbbfa3189485",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--071b6f8d-8e57-4b65-8c20-3e1a2977e564-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "I2C_DMAAbort"
+          },
+          "id": "call_00_rSpcxd8ycECtEQycA1Bf2LfK",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2654,
+        "output_tokens": 38,
+        "total_tokens": 2692,
+        "input_token_details": {
+          "cache_read": 2048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO function not found: I2C_DMAAbort",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "4964cf74-cc55-400d-a7bd-bea18286d681",
+      "tool_call_id": "call_00_rSpcxd8ycECtEQycA1Bf2LfK",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 38,
+          "prompt_tokens": 2709,
+          "total_tokens": 2747,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2688
+          },
+          "prompt_cache_hit_tokens": 2688,
+          "prompt_cache_miss_tokens": 21
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "a2552fcb-1e72-489b-a967-9c0a8690277d",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--893e663e-227e-4179-b213-4f1c9571dfca-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "I2C_DMAAbort"
+          },
+          "id": "call_00_gN8qbiH2ZhZQqAlczWSJzyQp",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2709,
+        "output_tokens": 38,
+        "total_tokens": 2747,
+        "input_token_details": {
+          "cache_read": 2688
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='I2C_DMAAbort', callee_name='I2C_TreatErrorCallback', call_tag='call to I2C_TreatErrorCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=7002, call_type='direct', ret_type='noReturnValue', start_line_content='  I2C_TreatErrorCallback(hi2c);')]\nFunction call from info: [FunctionCallInfo(caller_name='HAL_I2C_Slave_Seq_Receive_DMA', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=4383, call_type='indirect', ret_type='noReturnValue', start_line_content='            hi2c->hdmatx->XferAbortCallback(hi2c->hdmatx);'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Seq_Receive_DMA', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=4405, call_type='indirect', ret_type='noReturnValue', start_line_content='            hi2c->hdmarx->XferAbortCallback(hi2c->hdmarx);'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Seq_Transmit_DMA', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=4099, call_type='indirect', ret_type='noReturnValue', start_line_content='            hi2c->hdmarx->XferAbortCallback(hi2c->hdmarx);'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Seq_Transmit_DMA', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=4121, call_type='indirect', ret_type='noReturnValue', start_line_content='            hi2c->hdmatx->XferAbortCallback(hi2c->hdmatx);'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Seq_Receive_IT', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=4282, call_type='indirect', ret_type='noReturnValue', start_line_content='            hi2c->hdmatx->XferAbortCallback(hi2c->hdmatx);'), FunctionCallInfo(caller_name='HAL_I2C_Slave_Seq_Transmit_IT', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=3998, call_type='indirect', ret_type='noReturnValue', start_line_content='            hi2c->hdmarx->XferAbortCallback(hi2c->hdmarx);'), FunctionCallInfo(caller_name='HAL_DMA_IRQHandler', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma.c', start_line=878, call_type='indirect', ret_type='noReturnValue', start_line_content='          hdma->XferAbortCallback(hdma);'), FunctionCallInfo(caller_name='HAL_UART_IRQHandler', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2244, call_type='indirect', ret_type='noReturnValue', start_line_content='              huart->hdmarx->XferAbortCallback(huart->hdmarx);'), FunctionCallInfo(caller_name='HAL_UART_AbortReceive_IT', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=2064, call_type='indirect', ret_type='noReturnValue', start_line_content='        huart->hdmarx->XferAbortCallback(huart->hdmarx);'), FunctionCallInfo(caller_name='HAL_UART_AbortTransmit_IT', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', start_line=1972, call_type='indirect', ret_type='noReturnValue', start_line_content='        huart->hdmatx->XferAbortCallback(huart->hdmatx);'), FunctionCallInfo(caller_name='I2C_ITError', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=6671, call_type='indirect', ret_type='noReturnValue', start_line_content='        hi2c->hdmatx->XferAbortCallback(hi2c->hdmatx);'), FunctionCallInfo(caller_name='I2C_ITError', callee_name='I2C_DMAAbort', call_tag='XferAbortCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', start_line=6701, call_type='indirect', ret_type='noReturnValue', start_line_content='        hi2c->hdmarx->XferAbortCallback(hi2c->hdmarx);')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "b0d1a88e-59df-43c3-958c-c13a4f1e46f4",
+      "tool_call_id": "call_00_gN8qbiH2ZhZQqAlczWSJzyQp",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check what `I2C_TreatErrorCallback` does:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 4505,
+          "total_tokens": 4542,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2688
+          },
+          "prompt_cache_hit_tokens": 2688,
+          "prompt_cache_miss_tokens": 1817
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "ded80d12-629e-40fc-bcbb-0846f41a4947",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--001e952c-02d4-483d-bcc5-07bde4c7a7b5-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "I2C_TreatErrorCallback"
+          },
+          "id": "call_00_TZ2kenNvPWeshrCxsURGyrtA",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4505,
+        "output_tokens": 37,
+        "total_tokens": 4542,
+        "input_token_details": {
+          "cache_read": 2688
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='I2C_TreatErrorCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', location_line=6720, function_content='/**\\n* @brief  I2C Error callback treatment.\\n* @param  hi2c I2C handle.\\n* @retval None\\n*/\\nstatic void I2C_TreatErrorCallback(I2C_HandleTypeDef *hi2c)\\n{\\n  if (hi2c->State == HAL_I2C_STATE_ABORT)\\n  {\\n    hi2c->State = HAL_I2C_STATE_READY;\\n    hi2c->PreviousState = I2C_STATE_NONE;\\n\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hi2c);\\n\\n    /* Call the corresponding callback to inform upper layer of End of Transfer */\\n#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)\\n    hi2c->AbortCpltCallback(hi2c);\\n#else\\n    HAL_I2C_AbortCpltCallback(hi2c);\\n#endif /* USE_HAL_I2C_REGISTER_CALLBACKS */\\n  }\\n  else\\n  {\\n    hi2c->PreviousState = I2C_STATE_NONE;\\n\\n    /* Process Unlocked */\\n    __HAL_UNLOCK(hi2c);\\n\\n    /* Call the corresponding callback to inform upper layer of End of Transfer */\\n#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)\\n    hi2c->ErrorCallback(hi2c);\\n#else\\n    HAL_I2C_ErrorCallback(hi2c);\\n#endif /* USE_HAL_I2C_REGISTER_CALLBACKS */\\n  }\\n}\\n', function_content_in_lines={'6720': 'static void I2C_TreatErrorCallback(I2C_HandleTypeDef *hi2c)', '6721': '{', '6722': '  if (hi2c->State == HAL_I2C_STATE_ABORT)', '6723': '  {', '6724': '    hi2c->State = HAL_I2C_STATE_READY;', '6725': '    hi2c->PreviousState = I2C_STATE_NONE;', '6726': '', '6727': '    /* Process Unlocked */', '6728': '    __HAL_UNLOCK(hi2c);', '6729': '', '6730': '    /* Call the corresponding callback to inform upper layer of End of Transfer */', '6731': '#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)', '6732': '    hi2c->AbortCpltCallback(hi2c);', '6733': '#else', '6734': '    HAL_I2C_AbortCpltCallback(hi2c);', '6735': '#endif /* USE_HAL_I2C_REGISTER_CALLBACKS */', '6736': '  }', '6737': '  else', '6738': '  {', '6739': '    hi2c->PreviousState = I2C_STATE_NONE;', '6740': '', '6741': '    /* Process Unlocked */', '6742': '    __HAL_UNLOCK(hi2c);', '6743': '', '6744': '    /* Call the corresponding callback to inform upper layer of End of Transfer */', '6745': '#if (USE_HAL_I2C_REGISTER_CALLBACKS == 1)', '6746': '    hi2c->ErrorCallback(hi2c);', '6747': '#else', '6748': '    HAL_I2C_ErrorCallback(hi2c);', '6749': '#endif /* USE_HAL_I2C_REGISTER_CALLBACKS */', '6750': '  }', '6751': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "c2b64c7c-526d-4089-9a38-db528f91d604",
+      "tool_call_id": "call_00_TZ2kenNvPWeshrCxsURGyrtA",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the `I2C_DMAAbort` function, here's my classification:\n\n## Function Classification: **NEEDCHECK**\n\n### Reasoning:\n\n1. **Function Purpose**: `I2C_DMAAbort` is a DMA abort callback function that handles DMA transfer abort scenarios in I2C communication.\n\n2. **Function Analysis**:\n   - The function performs **data structure maintenance** by resetting DMA callback pointers (`XferAbortCallback = NULL`) for both transmit and receive DMA handles\n   - It calls `I2C_TreatErrorCallback(hi2c)` which performs state management operations (setting I2C state to READY, unlocking the process, and calling appropriate error/abort callbacks)\n   - No actual MMIO operations or peripheral register access found in this function\n   - No data transmission/reception operations\n   - No interrupt enable/disable operations\n\n3. **Mixed Functionality**: \n   - The function contains **upper-layer logic** for managing I2C state machine and callback mechanisms\n   - It handles **program state management** through the `I2C_TreatErrorCallback` function\n   - While it's related to DMA operations, the actual work is in managing the software state and callbacks rather than direct hardware manipulation\n\n4. **Call Context**: The function is called as a callback from various I2C and DMA interrupt handlers and abort procedures, indicating it's part of the error handling and state management flow.\n\nThis function falls under **NEEDCHECK** because it mixes driver-related concepts (DMA abort handling) with important non-driver logic (state machine management, callback handling, and resource cleanup) that should be preserved for proper program operation.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 355,
+          "prompt_tokens": 5466,
+          "total_tokens": 5821,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4480
+          },
+          "prompt_cache_hit_tokens": 4480,
+          "prompt_cache_miss_tokens": 986
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "5d914185-0dcc-4284-ba94-dcd602a3275b",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--87c309c0-f7ba-4b78-814e-a48c85376228-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 5466,
+        "output_tokens": 355,
+        "total_tokens": 5821,
+        "input_token_details": {
+          "cache_read": 4480
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "I2C_DMAAbort",
+    "function_type": "NEEDCHECK",
+    "functionality": "DMA I2C communication abort callback that resets DMA abort callbacks and handles I2C error treatment",
+    "classification_reason": "This function performs mixed operations: it resets DMA callback pointers (driver-related) and calls I2C_TreatErrorCallback which manages I2C state machine, unlocks processes, and calls upper-layer callbacks (non-driver logic). While related to DMA operations, the actual work involves software state management and callback handling that should be preserved.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}

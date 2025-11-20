@@ -1,0 +1,248 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n3. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n4. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n5. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "c4e19066-dd5a-4823-8a9c-a4d82ecd16f9"
+    },
+    {
+      "content": "Classify the function : FLASH_WaitForLastOperation",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "5d81e527-479b-4594-8293-7eecf0fe3d46"
+    },
+    {
+      "content": "I'll analyze the function `FLASH_WaitForLastOperation` by first collecting information about it and then classifying it according to the specified categories.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 51,
+          "prompt_tokens": 2024,
+          "total_tokens": 2075,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1984
+          },
+          "prompt_cache_hit_tokens": 1984,
+          "prompt_cache_miss_tokens": 40
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "be4b8b1b-526b-44c0-a2d3-dcd693d09b20",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--10c1902e-79e4-438c-a8f0-bca20b1380db-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "FLASH_WaitForLastOperation"
+          },
+          "id": "call_00_t0tC4EJdMuiu6gKUjG0XvuNS",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2024,
+        "output_tokens": 51,
+        "total_tokens": 2075,
+        "input_token_details": {
+          "cache_read": 1984
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', location_line=596, function_content='/**\\n* @brief  Wait for a FLASH operation to complete.\\n* @param  Timeout maximum flash operationtimeout\\n* @retval HAL Status\\n*/\\nHAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)\\n{ \\n  uint32_t tickstart = 0;\\n  \\n  /* Clear Error Code */\\n  pFlash.ErrorCode = HAL_FLASH_ERROR_NONE;\\n  \\n  /* Wait for the FLASH operation to complete by polling on BUSY flag to be reset.\\n     Even if the FLASH operation fails, the BUSY flag will be reset and an error\\n     flag will be set */\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET) \\n  { \\n    if(Timeout != HAL_MAX_DELAY)\\n    {\\n      if((Timeout == 0)||((HAL_GetTick() - tickstart ) > Timeout))\\n      {\\n        return HAL_TIMEOUT;\\n      }\\n    } \\n  }\\n  \\n  if(__HAL_FLASH_GET_FLAG(FLASH_FLAG_ALL_ERRORS) != RESET)\\n  {\\n    /*Save the error code*/\\n    FLASH_SetErrorCode();\\n    return HAL_ERROR;\\n  }\\n  \\n  /* Check FLASH End of Operation flag  */\\n  if (__HAL_FLASH_GET_FLAG(FLASH_FLAG_EOP) != RESET)\\n  {\\n    /* Clear FLASH End of Operation pending bit */\\n    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP);\\n  }\\n\\n  /* If there is an error flag set */\\n  return HAL_OK;\\n  \\n}  \\n', function_content_in_lines={'596': 'HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)', '597': '{ ', '598': '  uint32_t tickstart = 0;', '599': '  ', '600': '  /* Clear Error Code */', '601': '  pFlash.ErrorCode = HAL_FLASH_ERROR_NONE;', '602': '  ', '603': '  /* Wait for the FLASH operation to complete by polling on BUSY flag to be reset.', '604': '     Even if the FLASH operation fails, the BUSY flag will be reset and an error', '605': '     flag will be set */', '606': '  /* Get tick */', '607': '  tickstart = HAL_GetTick();', '608': '', '609': '  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET) ', '610': '  { ', '611': '    if(Timeout != HAL_MAX_DELAY)', '612': '    {', '613': '      if((Timeout == 0)||((HAL_GetTick() - tickstart ) > Timeout))', '614': '      {', '615': '        return HAL_TIMEOUT;', '616': '      }', '617': '    } ', '618': '  }', '619': '  ', '620': '  if(__HAL_FLASH_GET_FLAG(FLASH_FLAG_ALL_ERRORS) != RESET)', '621': '  {', '622': '    /*Save the error code*/', '623': '    FLASH_SetErrorCode();', '624': '    return HAL_ERROR;', '625': '  }', '626': '  ', '627': '  /* Check FLASH End of Operation flag  */', '628': '  if (__HAL_FLASH_GET_FLAG(FLASH_FLAG_EOP) != RESET)', '629': '  {', '630': '    /* Clear FLASH End of Operation pending bit */', '631': '    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP);', '632': '  }', '633': '', '634': '  /* If there is an error flag set */', '635': '  return HAL_OK;', '636': '  ', '637': '}  '})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "18654f29-5bee-4e9b-b7fe-242082302fb1",
+      "tool_call_id": "call_00_t0tC4EJdMuiu6gKUjG0XvuNS",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me collect the MMIO expressions used by this function to understand what peripheral operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 3105,
+          "total_tokens": 3149,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2048
+          },
+          "prompt_cache_hit_tokens": 2048,
+          "prompt_cache_miss_tokens": 1057
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "9fc619c3-004f-4b30-a0d6-a5f31df26571",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--c86cb7f0-7281-4783-a650-4f655c0e35cf-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "FLASH_WaitForLastOperation"
+          },
+          "id": "call_00_pscqYVTmHY0Za0Oloub1FAXc",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3105,
+        "output_tokens": 44,
+        "total_tokens": 3149,
+        "input_token_details": {
+          "cache_read": 2048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', location_line=596, function_content='/**\\n* @brief  Wait for a FLASH operation to complete.\\n* @param  Timeout maximum flash operationtimeout\\n* @retval HAL Status\\n*/\\nHAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)\\n{ \\n  uint32_t tickstart = 0;\\n  \\n  /* Clear Error Code */\\n  pFlash.ErrorCode = HAL_FLASH_ERROR_NONE;\\n  \\n  /* Wait for the FLASH operation to complete by polling on BUSY flag to be reset.\\n     Even if the FLASH operation fails, the BUSY flag will be reset and an error\\n     flag will be set */\\n  /* Get tick */\\n  tickstart = HAL_GetTick();\\n\\n  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET) \\n  { \\n    if(Timeout != HAL_MAX_DELAY)\\n    {\\n      if((Timeout == 0)||((HAL_GetTick() - tickstart ) > Timeout))\\n      {\\n        return HAL_TIMEOUT;\\n      }\\n    } \\n  }\\n  \\n  if(__HAL_FLASH_GET_FLAG(FLASH_FLAG_ALL_ERRORS) != RESET)\\n  {\\n    /*Save the error code*/\\n    FLASH_SetErrorCode();\\n    return HAL_ERROR;\\n  }\\n  \\n  /* Check FLASH End of Operation flag  */\\n  if (__HAL_FLASH_GET_FLAG(FLASH_FLAG_EOP) != RESET)\\n  {\\n    /* Clear FLASH End of Operation pending bit */\\n    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP);\\n  }\\n\\n  /* If there is an error flag set */\\n  return HAL_OK;\\n  \\n}  \\n', function_content_in_lines={'596': 'HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)', '597': '{ ', '598': '  uint32_t tickstart = 0;', '599': '  ', '600': '  /* Clear Error Code */', '601': '  pFlash.ErrorCode = HAL_FLASH_ERROR_NONE;', '602': '  ', '603': '  /* Wait for the FLASH operation to complete by polling on BUSY flag to be reset.', '604': '     Even if the FLASH operation fails, the BUSY flag will be reset and an error', '605': '     flag will be set */', '606': '  /* Get tick */', '607': '  tickstart = HAL_GetTick();', '608': '', '609': '  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET) ', '610': '  { ', '611': '    if(Timeout != HAL_MAX_DELAY)', '612': '    {', '613': '      if((Timeout == 0)||((HAL_GetTick() - tickstart ) > Timeout))', '614': '      {', '615': '        return HAL_TIMEOUT;', '616': '      }', '617': '    } ', '618': '  }', '619': '  ', '620': '  if(__HAL_FLASH_GET_FLAG(FLASH_FLAG_ALL_ERRORS) != RESET)', '621': '  {', '622': '    /*Save the error code*/', '623': '    FLASH_SetErrorCode();', '624': '    return HAL_ERROR;', '625': '  }', '626': '  ', '627': '  /* Check FLASH End of Operation flag  */', '628': '  if (__HAL_FLASH_GET_FLAG(FLASH_FLAG_EOP) != RESET)', '629': '  {', '630': '    /* Clear FLASH End of Operation pending bit */', '631': '    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP);', '632': '  }', '633': '', '634': '  /* If there is an error flag set */', '635': '  return HAL_OK;', '636': '  ', '637': '}  '})\nMMIO Exprs info: [MmioExprInfo(name='... & ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=609, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=620, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=628, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... != ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=609, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=609, expr_type='binary', enclosing_type='while'), MmioExprInfo(name='... != ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=620, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=628, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... = ...', function='FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=631, expr_type='assign', enclosing_type='stmt')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "178354c7-30a0-4fb9-8a36-e7bb00109d1c",
+      "tool_call_id": "call_00_pscqYVTmHY0Za0Oloub1FAXc",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 4850,
+          "total_tokens": 4887,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3136
+          },
+          "prompt_cache_hit_tokens": 3136,
+          "prompt_cache_miss_tokens": 1714
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "baae7d81-6190-469c-ab36-201089afaecf",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--844d6eb0-4bab-4351-8686-036d375a45e8-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "FLASH_WaitForLastOperation"
+          },
+          "id": "call_00_auayPz3EIQhqDmTD6XlYzf6H",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 4850,
+        "output_tokens": 37,
+        "total_tokens": 4887,
+        "input_token_details": {
+          "cache_read": 3136
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='FLASH_WaitForLastOperation', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=607, call_type='direct', ret_type='noReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='FLASH_WaitForLastOperation', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=607, call_type='direct', ret_type='hasReturnValue', start_line_content='  tickstart = HAL_GetTick();'), FunctionCallInfo(caller_name='FLASH_WaitForLastOperation', callee_name='HAL_GetTick', call_tag='call to HAL_GetTick', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=613, call_type='direct', ret_type='noReturnValue', start_line_content='      if((Timeout == 0)||((HAL_GetTick() - tickstart ) > Timeout))'), FunctionCallInfo(caller_name='FLASH_WaitForLastOperation', callee_name='FLASH_SetErrorCode', call_tag='call to FLASH_SetErrorCode', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=623, call_type='direct', ret_type='noReturnValue', start_line_content='    FLASH_SetErrorCode();')]\nFunction call from info: [FunctionCallInfo(caller_name='HAL_FLASHEx_Erase', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=168, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASHEx_Erase', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=168, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASHEx_Erase', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=185, call_type='direct', ret_type='noReturnValue', start_line_content='      status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASHEx_Erase', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=185, call_type='direct', ret_type='hasReturnValue', start_line_content='      status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASHEx_Erase', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=201, call_type='direct', ret_type='noReturnValue', start_line_content='        status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASHEx_Erase', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=201, call_type='direct', ret_type='hasReturnValue', start_line_content='        status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASH_OB_Launch', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=552, call_type='direct', ret_type='noReturnValue', start_line_content='  return(FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE)); '), FunctionCallInfo(caller_name='HAL_FLASH_Program', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=173, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASH_Program', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=173, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASH_Program', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=210, call_type='direct', ret_type='noReturnValue', start_line_content='    status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='HAL_FLASH_Program', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', start_line=210, call_type='direct', ret_type='hasReturnValue', start_line_content='    status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_BootAddressConfig', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=940, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_BootAddressConfig', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=940, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_RDP_LevelConfig', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=881, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_RDP_LevelConfig', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=881, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_DisableWRP', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=850, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_DisableWRP', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=850, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_EnableWRP', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=814, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_EnableWRP', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=814, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_UserConfig', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=595, call_type='direct', ret_type='noReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);'), FunctionCallInfo(caller_name='FLASH_OB_UserConfig', callee_name='FLASH_WaitForLastOperation', call_tag='call to FLASH_WaitForLastOperation', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', start_line=595, call_type='direct', ret_type='hasReturnValue', start_line_content='  status = FLASH_WaitForLastOperation((uint32_t)FLASH_TIMEOUT_VALUE);')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "6e1dc991-6442-4b37-8e33-e13a95da9e1f",
+      "tool_call_id": "call_00_auayPz3EIQhqDmTD6XlYzf6H",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the function `FLASH_WaitForLastOperation`, I can now provide a classification:\n\n## Function Classification: **RETURNOK**\n\n### Reasoning:\n\n1. **Function Purpose**: This function waits for a FLASH operation to complete by polling the BUSY flag and checking for errors. It's a status monitoring function that doesn't perform actual data transmission or reception.\n\n2. **Key Observations**:\n   - The function performs peripheral register polling operations to check FLASH status flags (`FLASH_FLAG_BSY`, `FLASH_FLAG_ALL_ERRORS`, `FLASH_FLAG_EOP`)\n   - It uses MMIO expressions to read and clear FLASH peripheral flags\n   - It implements timeout logic using `HAL_GetTick()` for timing\n   - It returns status codes (`HAL_OK`, `HAL_TIMEOUT`, `HAL_ERROR`) based on the operation outcome\n\n3. **Classification Justification**:\n   - **Not RECV**: No data transmission/reception operations - only status checking\n   - **Not IRQ**: No interrupt handling or enabling operations\n   - **RETURNOK**: This function primarily performs driver/peripheral status monitoring operations and returns status codes. In a POSIX environment where we don't have actual FLASH hardware, we can simply return success status (`HAL_OK`) since the function's main purpose is to wait for completion and report status.\n\n4. **Replacement Strategy**: \n   - Since this is a status monitoring function for FLASH operations, and we're eliminating hardware dependencies, we can replace it with a function that immediately returns success (`HAL_OK`)\n   - The timeout logic and error checking can be safely removed since we're not dealing with actual FLASH hardware operations\n\nThe function fits well in the RETURNOK category because it performs driver-specific status monitoring that doesn't affect upper-layer data structures, and we can safely return success status in the POSIX environment.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 398,
+          "prompt_tokens": 8153,
+          "total_tokens": 8551,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 4864
+          },
+          "prompt_cache_hit_tokens": 4864,
+          "prompt_cache_miss_tokens": 3289
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_ffc7281d48_prod0820_fp8_kvcache",
+        "id": "f5c1eae9-e58e-4d55-9e4b-3151dab8c445",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--b893f226-d223-42e5-8e5d-ada7692cbc43-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 8153,
+        "output_tokens": 398,
+        "total_tokens": 8551,
+        "input_token_details": {
+          "cache_read": 4864
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "FLASH_WaitForLastOperation",
+    "function_type": "RETURNOK",
+    "functionality": "Wait for a FLASH operation to complete by polling BUSY flag and checking for errors with timeout handling",
+    "classification_reason": "This function performs peripheral status monitoring by polling FLASH flags (BUSY, ERROR, EOP) and returns status codes. It doesn't perform data transmission/reception (not RECV), doesn't handle interrupts (not IRQ), and primarily provides driver-level status reporting that can be safely replaced with success status in POSIX environment.",
+    "has_replacement": true,
+    "function_replacement": "HAL_StatusTypeDef FLASH_WaitForLastOperation(uint32_t Timeout)\n{ \n  /* Clear Error Code */\n  pFlash.ErrorCode = HAL_FLASH_ERROR_NONE;\n  \n  /* In POSIX environment, FLASH operations are simulated and always succeed */\n  return HAL_OK;\n}"
+  }
+}
