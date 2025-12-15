@@ -1,0 +1,540 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer tasked with replacing functions from a driver library. The goal is to eliminate dependencies on peripheral hardware (such as I/O operations, peripheral register access, etc.) while preserving the normal functionality of functions and MCU-related operations (including OS scheduling and interrupt triggering).\n\nMy approach is: First analyze the functionality and characteristics of driver functions and classify them; then for each category, select different replacement strategies and priorities.\n\nTo analyze the given function, you need to use tools to collect the function info, the mmioexprs used by the function, the call stack of the function and the struct/enum used, functions called by the function, analyze the function body to understand its functionality and determine its category.\nThen, based on the analysis, classify the function into one of the following categories: RECV, IRQ, RETURNOK, SKIP, NEEDCHECK, NODRIVER.\n\n\nFunction Classification and Rewriting Strategies:\n\n1. RECV (Data Transmission/Reception Functions) (Priority Replacement)\n  * Identification: Functions performing critical data I/O operations, DMA ring buffer management, or peripheral data transfer (data read).\n  * Example: HAL_Eth_ReadFrame, Uart_Receive, Flash_Read\n  * Strategy: Redirect I/O operations to POSIX-equivalent interfaces.\n    ◦ When receiving data: Use `int HAL_BE_ENET_ReadFrame(void* buf, int length)` (for receiving data packets, where `length` indicates the maximum length of the receive buffer) or `int HAL_BE_In(void* buf, int len)` (for receiving fixed-length bytes, where `len` indicates the number of bytes to read from stdin). These functions are defined in `HAL_BE.h` (ensure to include this header file before use to avoid errors).\n    ◦ When sending data: Output to stdout (e.g., using `printf`) or other appropriate output streams; can be skipped if not essential.\n\n2. IRQ (Interrupt Service Functions) (Priority Replacement)\n  • Identification: Functions handling hardware interrupts (e.g., `IRQHandler`) or enabling interrupts (IRQ) (e.g., `IRQ_Enable` or IRQ enable operation in function body).\n  • Strategy: Preserve interrupt-related operations, remove actual IRQ operations.\n\n(! IT'S IMPORTANT THAT Do make sure that the function is not RECV or IRQ type, then the function can be classified as other types.)  \n\n3. INIT (Function for initialization) (Priority Replacement)\n  * Identification: Functions that initialize driver/peripheral resources, set up initial configurations, or perform other setup tasks.\n  * Strategy: Remove mmio or register access operations. Preserve initialization logic for other structures (especially resource allocation and configuration) and try your best to keep the original functionality, keep the state machine correct after the initialization.\n\n4. LOOP (Functions that contains loops influenced by mmio or peripheral operations) (Priority Replacement, skip the loop if necessary)\n  * Identification: Functions that contain loops where the loop condition or body is influenced by mmio or peripheral operations.\n  * Strategy: Modify the loop to avoid infinite loops or blocking behavior. If necessary, skip the loop entirely while preserving the overall function structure.\n  case:\n  ```c\n        while ((_DAT_40023800 & 0x2000000) != 0) {\n        uVar2 = HAL_GetTick();\n        if (2 < uVar2 - uVar1) {\n          return HAL_TIMEOUT;\n        }\n      }\n  ```\n  this case has a loop that waits for a hardware flag to clear. You can modify the loop to avoid waiting on the hardware flag, or skip the loop entirely if it's not necessary.\n\n5. RETURNOK (Driver-Only Functionality Functions)\n  * Identification: Functions that only perform driver/peripheral operations and do not affect upper-layer data structures.\n  * Strategy: Return success status or appropriate default values.\n    ◦ For HAL functions: Return success flags (e.g., `HAL_OK` or `0`).\n    ◦ For functions with return values: Return appropriate default values.\n\n6. SKIP (Non-Critical Driver Functions)\n  * Identification: Functions performing non-critical driver operations that can be safely ignored.\n  * Strategy: Completely remove or use empty implementations (e.g., keep empty function bodies for void functions).\n\n7. NEEDCHECK (Complex Mixed-Functionality Functions)\n  • Identification: Functions mixing driver operations with non-driver logic such as data structure maintenance.)\n  • Strategy: Remove driver operations, preserve non-driver logic.\n    ◦ Identify and preserve data structure operations and program state management (upper-layer logic).\n    ◦ Maintain program state management.\n    ◦ Keep OS-related operations unchanged.\n    ◦ Flag for manual review and verification.\n\n6. NODRIVER (Non-Driver Functions)\n  • Identification: Functions incorrectly marked as driver-dependent.\n  • Strategy: Preserve original implementation without changes.\n\nValidation Requirements:\n\nnotice that do not change the return type of the function, eg. the return type of the function is void, then the return type of the rewritten function should also be void.\nnotice that do not try to declare any extern value in the function, just assume that they already exist in the file as global value.\nnotice that do not include any header files.\nnotice that all the function and operation about os should be reserved, and do not modify any of these operations.\nnotice that do not define any struct or enum and just pretend that they already in the project.\nnotice that if you find #ifdef label, keep it instead of removeing it ,and do not remove make up these labels yourself.\nnotice that do not use any function call that not appeared in files or provided below (including: don't use fflush etc.)\n\n\nHelper Functions Can Be Used:\n```c\nint HAL_BE_return_0() // return 0, usally success\n\nint HAL_BE_return_1() // return 1\n\nint HAL_BE_Out(int len) // modify data transmit (transmission operation can also be skipped)\n\nint HAL_BE_In(void* buf, int len) // modify data receive (fixed data size)\n\nint HAL_BE_ENET_ReadFrame(void* buf, int length) // modify data receive (not fixed package size)\n\nint HAL_BE_Block_Write(void* buf, int block_size, int block_num) // modify storage(SD card, flash, etc.) data write to storage from buffer(fixed data size)\n\nint HAL_BE_Block_Read(void* buf, int block_size, int block_num) // modify storage(SD card, flash, etc.) data receive from storage to buffer(fixed data size)\n```\n\nFirst, I will provide you with C function code. Please analyze its functionality according to the above rules, provide classification and explain the reasoning. The current phase does not require writing complete replacement code.\n\nIf a function is of type RECV or IRQ, please carefully analyze the function's content. Use the provided tools to obtain the MMIO driver information of the interface. Then, based on the given replacement strategies, generate the replacement function. For other cases, no replacement is needed for now.\n\nRECV:\nReplacement Strategy:\n•   When receiving data: Use int HAL_BE_ENET_ReadFrame(void* buf, int length) (for receiving data packets, where length indicates the maximum length of the receive buffer) or int HAL_BE_In(void* buf, int len) (for receiving a fixed number of bytes, where len indicates the number of bytes to read from stdin). These functions are defined in HAL_BE.h (be sure to include this header file before use, otherwise errors may occur).\n\n•   When sending data: Output to stdout (e.g., using printf) or another suitable output stream. If this is difficult to handle, it can be skipped directly.\n\nIRQ:\nReplacement Strategy:\n•   For interrupt handler functions: If there is a situation where the execution flow is determined by operations on peripherals, modify the branch conditions to ensure priority is given to executing the data reception flow for handling hardware interrupts or functions that enable interrupts (IRQ).\n\n•   For functions containing interrupt enable operations: Adjust the function's execution flow to ensure the program can reach the operations related to enabling IRQ interrupts.\n\nIf you need additional information about the program, you can call the tools we provide.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "d320a1d1-fe98-41a6-99b5-ccd0692ef95f"
+    },
+    {
+      "content": "Classify the function : UART_WriteNonBlocking",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "0bb58fe4-f447-43d2-913f-3668a23784fe"
+    },
+    {
+      "content": "I'll analyze the function `UART_WriteNonBlocking` to classify it according to your guidelines. First, let me gather information about this function.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 82,
+          "prompt_tokens": 2498,
+          "total_tokens": 2580,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2432
+          },
+          "prompt_cache_hit_tokens": 2432,
+          "prompt_cache_miss_tokens": 66
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "ff449c05-5444-45bd-9730-7085f169b40d",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--00c5ff24-3bc8-4d2a-88f0-72fb634b9552-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "UART_WriteNonBlocking"
+          },
+          "id": "call_00_zQPs2znI52RS0zmFcVUO7MVB",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2498,
+        "output_tokens": 82,
+        "total_tokens": 2580,
+        "input_token_details": {
+          "cache_read": 2432
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function not found: UART_WriteNonBlocking",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "952e6584-1201-482a-abfd-8909d05eb47f",
+      "tool_call_id": "call_00_zQPs2znI52RS0zmFcVUO7MVB",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me check what functions are available in the database:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 41,
+          "prompt_tokens": 2608,
+          "total_tokens": 2649,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2560
+          },
+          "prompt_cache_hit_tokens": 2560,
+          "prompt_cache_miss_tokens": 48
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "eb3b4ed6-1ff9-4575-b9a8-b3144c924252",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--d1976343-ebc7-4d6f-b5b0-2942e9bf062b-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_list",
+          "args": {},
+          "id": "call_00_9UIlArwBhUGlc6v2FhA3oOPG",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 2608,
+        "output_tokens": 41,
+        "total_tokens": 2649,
+        "input_token_details": {
+          "cache_read": 2560
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO function list: ['HAL_I2C_Mem_Read', 'HAL_I2C_Mem_Write', 'HAL_I2C_Slave_Receive', 'HAL_I2C_Slave_Transmit', 'HAL_I2C_Master_Receive', 'HAL_I2C_Master_Transmit', 'HAL_DMA2D_CLUTLoading_Abort', 'HAL_DMA2D_CLUTLoading_Suspend', 'ETH_Prepare_Tx_Descriptors', 'BSP_SDRAM_MspInit', 'BSP_SD_MspInit', 'BSP_SRAM_MspInit', 'HAL_DMA_Init', 'BSP_CAMERA_MspInit', 'HAL_GPIO_DeInit', 'I2C_IsErrorOccurred', 'BSP_COM_Init', 'BSP_PB_Init', 'BSP_LED_Init', 'MFX_IO_ITConfig', 'BSP_POTENTIOMETER_Init', 'I2Cx_MspInit', 'BSP_LCD_Reset', 'BSP_LCD_MspInit', 'HAL_PWREx_DisableOverDrive', 'HAL_PWREx_EnableOverDrive', 'HAL_RCCEx_PeriphCLKConfig', 'HAL_RCC_MCOConfig', 'HAL_RCC_OscConfig', 'HAL_GPIO_Init', 'HAL_ETH_MspInit', 'HAL_ETH_Init', 'HAL_I2CEx_DisableFastModePlus', 'HAL_I2CEx_EnableFastModePlus', 'HAL_DSI_ExitULPM', 'HAL_DSI_EnterULPM', 'HAL_DSI_ExitULPMData', 'HAL_DSI_Stop', 'HAL_DSI_Start', 'HAL_DSI_DeInit', 'HAL_DSI_Init', 'HAL_PWREx_EnterUnderDriveSTOPMode', 'HAL_PWREx_ControlVoltageScaling', 'HAL_InitTick', 'SystemClock_Config', 'HAL_I2C_IsDeviceReady', 'HAL_FLASHEx_Erase', 'ETH_DMARxDescListInit', 'ETH_DMATxDescListInit', 'HAL_RCC_ClockConfig', 'HAL_DMA_IRQHandler', 'HAL_DMA_Abort', 'HAL_DMA2D_PollForTransfer', 'HAL_DMA2D_Abort', 'HAL_DMA2D_Suspend', 'UART_SetConfig', 'HAL_TIMEx_OnePulseN_Stop_IT', 'HAL_TIMEx_OnePulseN_Stop', 'HAL_TIMEx_PWMN_Stop_DMA', 'HAL_TIMEx_PWMN_Stop_IT', 'HAL_TIMEx_PWMN_Stop', 'HAL_TIMEx_OCN_Stop_DMA', 'HAL_TIMEx_OCN_Stop_IT', 'HAL_TIMEx_OCN_Stop', 'HAL_TIMEx_HallSensor_Stop_DMA', 'HAL_TIMEx_HallSensor_Stop_IT', 'HAL_TIMEx_HallSensor_Stop', 'HAL_TIM_Encoder_Stop_DMA', 'HAL_TIM_Encoder_Stop_IT', 'HAL_TIM_Encoder_Stop', 'HAL_TIM_OnePulse_Stop_IT', 'HAL_TIM_OnePulse_Stop', 'HAL_TIM_IC_Stop_DMA', 'HAL_TIM_IC_Stop_IT', 'HAL_TIM_IC_Stop', 'HAL_TIM_PWM_Stop_DMA', 'HAL_TIM_PWM_Stop_IT', 'HAL_TIM_PWM_Stop', 'HAL_TIM_OC_Stop_DMA', 'HAL_TIM_OC_Stop_IT', 'HAL_TIM_OC_Stop', 'HAL_ETH_ReadPHYRegister', 'HAL_ETH_WritePHYRegister', 'HAL_RCCEx_EnablePLLSAI', 'HAL_RCCEx_EnablePLLI2S', 'HAL_DSI_Read', 'I2C_WaitOnRXNEFlagUntilTimeout', 'HAL_ETH_Transmit', 'ETH_UpdateDescriptor', 'HAL_ETH_ReadData', 'HAL_ETH_Transmit_IT', 'HAL_ETH_SetWakeUpFilter', 'HAL_DSI_LongWrite', 'I2C_WaitOnFlagUntilTimeout', 'HAL_PWREx_DisableBkUpReg', 'HAL_TIMEx_HallSensor_DeInit', 'HAL_TIM_Encoder_DeInit', 'HAL_TIM_OnePulse_DeInit', 'HAL_TIM_IC_DeInit', 'HAL_TIM_PWM_DeInit', 'HAL_TIM_OC_DeInit', 'HAL_TIM_Base_Stop_DMA', 'HAL_TIM_Base_Stop_IT', 'HAL_TIM_Base_Stop', 'HAL_TIM_Base_DeInit', 'HAL_PWREx_EnableBkUpReg', 'HAL_DSI_EnterULPMData', 'HAL_RCCEx_DisablePLLSAI', 'HAL_RCCEx_DisablePLLI2S', 'HAL_RCC_DeInit', 'HAL_ETH_ReleaseTxPacket', 'FLASH_WaitForLastOperation', 'HAL_LTDC_DeInit', 'DSI_ShortWrite', 'I2C_WaitOnSTOPFlagUntilTimeout', 'I2C_WaitOnTXISFlagUntilTimeout']",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_list",
+      "id": "89f21a63-2d86-4680-ab31-1164bbd58eca",
+      "tool_call_id": "call_00_9UIlArwBhUGlc6v2FhA3oOPG",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "I don't see `UART_WriteNonBlocking` in the MMIO function list. Let me check if there are other UART-related functions or search more broadly:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 66,
+          "prompt_tokens": 3911,
+          "total_tokens": 3977,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 2624
+          },
+          "prompt_cache_hit_tokens": 2624,
+          "prompt_cache_miss_tokens": 1287
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "f68b2ccc-f641-46c9-be16-921e5c137e2b",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--3c29615d-fd2e-4347-b2f3-e17b29c4e721-0",
+      "tool_calls": [
+        {
+          "name": "list_files_in_db_zip",
+          "args": {},
+          "id": "call_00_sxjyy4ZXykD2hetcI730xzMb",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3911,
+        "output_tokens": 66,
+        "total_tokens": 3977,
+        "input_token_details": {
+          "cache_read": 2624
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Files in src.zip: ['home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/camera.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/idd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/io.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/ts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/dp83848/dp83848.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/dp83848/dp83848.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/otm8009a/otm8009a.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/otm8009a/otm8009a.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/ov5640/ov5640.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/s5k5cag/s5k5cag.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/stmpe811/stmpe811.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/stmpe811/stmpe811.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_camera.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_io.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_io.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_lcd.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_lcd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sd.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sdram.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sdram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Device/ST/STM32F7xx/Include/stm32f769xx.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Device/ST/STM32F7xx/Include/stm32f7xx.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Device/ST/STM32F7xx/Include/system_stm32f7xx.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/cmsis_compiler.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/cmsis_gcc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/cmsis_version.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/core_cm7.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/mpu_armv7.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_adc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_adc_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_cortex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dcmi.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_def.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma2d.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dsi.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_eth.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_flash.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_flash_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_gpio.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_gpio_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_ltdc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_ltdc_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_mdios.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_nor.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_pwr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_pwr_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_rcc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_rcc_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sai.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sdram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_tim.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_tim_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_uart.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_uart_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_ll_fmc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_ll_sdmmc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/Legacy/stm32_hal_legacy.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dcmi_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_gpio.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_ltdc.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_ltdc_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_sdram.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_tim.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_tim_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_ll_fmc.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/FreeRTOSConfig.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/app_ethernet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/encode.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/ethernetif.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/jconfig.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/jdata_conf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/jmorecfg.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/lcd_log_conf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/lwipopts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/main.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/rtp_protocol.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/rtsp_protocol.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/s5k5cag_RGB888.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/stm32f769i_camera.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/stm32f7xx_hal_conf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/stm32f7xx_it.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/list.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/portable.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/queue.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/task.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/timers.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM0/portmacro.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LibJPEG/include/jpeglib.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/compat/stdc/errno.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/arch.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/debug.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/def.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/err.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/errno.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/etharp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/inet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip4.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip4_addr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip6_addr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip_addr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/mem.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/memp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/netif.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/opt.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/pbuf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/snmp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/sockets.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/stats.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/sys.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/tcpip.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/timeouts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/priv/mem_priv.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/priv/memp_priv.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/priv/memp_std.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/etharp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/ethernet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/ieee.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/ip4.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/netif/etharp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/netif/ethernet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/system/arch/cc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/system/arch/cpu.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/system/arch/sys_arch.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/SW4STM32/syscalls.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/app_ethernet.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/encode.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/ethernetif.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/main.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/rtp_protocol.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/rtsp_protocol.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/s5k5cag_RGB888.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f7xx_hal_timebase_tim.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f7xx_it.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/system_stm32f7xx.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font12.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font16.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font20.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font24.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font8.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/fonts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Log/lcd_log.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Log/lcd_log.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/_ansi.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/_newlib_version.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/alloca.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/assert.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/ctype.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/inttypes.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/limits.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/reent.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/stdint.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/stdio.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/stdlib.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/string.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/strings.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/unistd.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_default_types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_endian.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/endian.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/ieeefp.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/stdlib.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/newlib-nano/newlib.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_default_fcntl.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_intsup.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_locale.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_pthreadtypes.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_sigset.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_stdint.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_timespec.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_timeval.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/cdefs.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/config.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/fcntl.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/features.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/lock.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/reent.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/sched.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/select.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/stat.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/stdio.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/string.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/syslimits.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/times.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/timespec.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/unistd.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/wait.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include/stdarg.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include/stddef.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include/stdint.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include-fixed/limits.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include-fixed/syslimits.h']",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "list_files_in_db_zip",
+      "id": "66c57cdb-cde0-4f46-9ec6-e52524d5d68a",
+      "tool_call_id": "call_00_sxjyy4ZXykD2hetcI730xzMb",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "I can see there are UART-related files in the project. Let me search for UART functions more specifically. Let me check if there are any UART functions in the database by looking at the HAL UART driver file:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 96,
+          "prompt_tokens": 12598,
+          "total_tokens": 12694,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3904
+          },
+          "prompt_cache_hit_tokens": 3904,
+          "prompt_cache_miss_tokens": 8694
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "f6084756-1a2b-4723-8e74-8e0170b9066b",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--990b0d29-c247-4842-a6e1-526a8bab5025-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_UART_Transmit"
+          },
+          "id": "call_00_NmrhL4tnWuXIIlp7JzilKmms",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12598,
+        "output_tokens": 96,
+        "total_tokens": 12694,
+        "input_token_details": {
+          "cache_read": 3904
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_UART_Transmit', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', location_line=1089, function_content='/**\\n* @brief Send an amount of data in blocking mode.\\n* @note   When UART parity is not enabled (PCE = 0), and Word Length is configured to 9 bits (M1-M0 = 01),\\n*         the sent data is handled as a set of u16. In this case, Size must indicate the number\\n*         of u16 provided through pData.\\n* @param huart   UART handle.\\n* @param pData   Pointer to data buffer (u8 or u16 data elements).\\n* @param Size    Amount of data elements (u8 or u16) to be sent.\\n* @param Timeout Timeout duration.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size, uint32_t Timeout)\\n{\\n  const uint8_t  *pdata8bits;\\n  const uint16_t *pdata16bits;\\n  uint32_t tickstart;\\n\\n  /* Check that a Tx process is not already ongoing */\\n  if (huart->gState == HAL_UART_STATE_READY)\\n  {\\n    if ((pData == NULL) || (Size == 0U))\\n    {\\n      return  HAL_ERROR;\\n    }\\n\\n    huart->ErrorCode = HAL_UART_ERROR_NONE;\\n    huart->gState = HAL_UART_STATE_BUSY_TX;\\n\\n    /* Init tickstart for timeout management */\\n    tickstart = HAL_GetTick();\\n\\n    huart->TxXferSize  = Size;\\n    huart->TxXferCount = Size;\\n\\n    /* In case of 9bits/No Parity transfer, pData needs to be handled as a uint16_t pointer */\\n    if ((huart->Init.WordLength == UART_WORDLENGTH_9B) && (huart->Init.Parity == UART_PARITY_NONE))\\n    {\\n      pdata8bits  = NULL;\\n      pdata16bits = (const uint16_t *) pData;\\n    }\\n    else\\n    {\\n      pdata8bits  = pData;\\n      pdata16bits = NULL;\\n    }\\n\\n    while (huart->TxXferCount > 0U)\\n    {\\n      if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_TXE, RESET, tickstart, Timeout) != HAL_OK)\\n      {\\n\\n        huart->gState = HAL_UART_STATE_READY;\\n\\n        return HAL_TIMEOUT;\\n      }\\n      if (pdata8bits == NULL)\\n      {\\n        huart->Instance->TDR = (uint16_t)(*pdata16bits & 0x01FFU);\\n        pdata16bits++;\\n      }\\n      else\\n      {\\n        huart->Instance->TDR = (uint8_t)(*pdata8bits & 0xFFU);\\n        pdata8bits++;\\n      }\\n      huart->TxXferCount--;\\n    }\\n\\n    if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_TC, RESET, tickstart, Timeout) != HAL_OK)\\n    {\\n      huart->gState = HAL_UART_STATE_READY;\\n\\n      return HAL_TIMEOUT;\\n    }\\n\\n    /* At end of Tx process, restore huart->gState to Ready */\\n    huart->gState = HAL_UART_STATE_READY;\\n\\n    return HAL_OK;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'1089': 'HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size, uint32_t Timeout)', '1090': '{', '1091': '  const uint8_t  *pdata8bits;', '1092': '  const uint16_t *pdata16bits;', '1093': '  uint32_t tickstart;', '1094': '', '1095': '  /* Check that a Tx process is not already ongoing */', '1096': '  if (huart->gState == HAL_UART_STATE_READY)', '1097': '  {', '1098': '    if ((pData == NULL) || (Size == 0U))', '1099': '    {', '1100': '      return  HAL_ERROR;', '1101': '    }', '1102': '', '1103': '    huart->ErrorCode = HAL_UART_ERROR_NONE;', '1104': '    huart->gState = HAL_UART_STATE_BUSY_TX;', '1105': '', '1106': '    /* Init tickstart for timeout management */', '1107': '    tickstart = HAL_GetTick();', '1108': '', '1109': '    huart->TxXferSize  = Size;', '1110': '    huart->TxXferCount = Size;', '1111': '', '1112': '    /* In case of 9bits/No Parity transfer, pData needs to be handled as a uint16_t pointer */', '1113': '    if ((huart->Init.WordLength == UART_WORDLENGTH_9B) && (huart->Init.Parity == UART_PARITY_NONE))', '1114': '    {', '1115': '      pdata8bits  = NULL;', '1116': '      pdata16bits = (const uint16_t *) pData;', '1117': '    }', '1118': '    else', '1119': '    {', '1120': '      pdata8bits  = pData;', '1121': '      pdata16bits = NULL;', '1122': '    }', '1123': '', '1124': '    while (huart->TxXferCount > 0U)', '1125': '    {', '1126': '      if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_TXE, RESET, tickstart, Timeout) != HAL_OK)', '1127': '      {', '1128': '', '1129': '        huart->gState = HAL_UART_STATE_READY;', '1130': '', '1131': '        return HAL_TIMEOUT;', '1132': '      }', '1133': '      if (pdata8bits == NULL)', '1134': '      {', '1135': '        huart->Instance->TDR = (uint16_t)(*pdata16bits & 0x01FFU);', '1136': '        pdata16bits++;', '1137': '      }', '1138': '      else', '1139': '      {', '1140': '        huart->Instance->TDR = (uint8_t)(*pdata8bits & 0xFFU);', '1141': '        pdata8bits++;', '1142': '      }', '1143': '      huart->TxXferCount--;', '1144': '    }', '1145': '', '1146': '    if (UART_WaitOnFlagUntilTimeout(huart, UART_FLAG_TC, RESET, tickstart, Timeout) != HAL_OK)', '1147': '    {', '1148': '      huart->gState = HAL_UART_STATE_READY;', '1149': '', '1150': '      return HAL_TIMEOUT;', '1151': '    }', '1152': '', '1153': '    /* At end of Tx process, restore huart->gState to Ready */', '1154': '    huart->gState = HAL_UART_STATE_READY;', '1155': '', '1156': '    return HAL_OK;', '1157': '  }', '1158': '  else', '1159': '  {', '1160': '    return HAL_BUSY;', '1161': '  }', '1162': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "a0e8a995-bcbd-4cd3-861c-61c4c4b0b5ff",
+      "tool_call_id": "call_00_NmrhL4tnWuXIIlp7JzilKmms",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check if there's a `UART_WriteNonBlocking` function. Let me search for functions with \"Write\" in the name:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 84,
+          "prompt_tokens": 14674,
+          "total_tokens": 14758,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 12672
+          },
+          "prompt_cache_hit_tokens": 12672,
+          "prompt_cache_miss_tokens": 2002
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "dfc70122-d207-4a85-83cb-c0a01b656a9d",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--d267c482-411d-44b7-8fe4-5a220147b91c-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_UART_Transmit_IT"
+          },
+          "id": "call_00_1MTaNauF5eRb4xZ31O5VRjo9",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 14674,
+        "output_tokens": 84,
+        "total_tokens": 14758,
+        "input_token_details": {
+          "cache_read": 12672
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_UART_Transmit_IT', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', location_line=1259, function_content='/**\\n* @brief Send an amount of data in interrupt mode.\\n* @note   When UART parity is not enabled (PCE = 0), and Word Length is configured to 9 bits (M1-M0 = 01),\\n*         the sent data is handled as a set of u16. In this case, Size must indicate the number\\n*         of u16 provided through pData.\\n* @param huart UART handle.\\n* @param pData Pointer to data buffer (u8 or u16 data elements).\\n* @param Size  Amount of data elements (u8 or u16) to be sent.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_UART_Transmit_IT(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size)\\n{\\n  /* Check that a Tx process is not already ongoing */\\n  if (huart->gState == HAL_UART_STATE_READY)\\n  {\\n    if ((pData == NULL) || (Size == 0U))\\n    {\\n      return HAL_ERROR;\\n    }\\n\\n    huart->pTxBuffPtr  = pData;\\n    huart->TxXferSize  = Size;\\n    huart->TxXferCount = Size;\\n    huart->TxISR       = NULL;\\n\\n    huart->ErrorCode = HAL_UART_ERROR_NONE;\\n    huart->gState = HAL_UART_STATE_BUSY_TX;\\n\\n    /* Set the Tx ISR function pointer according to the data word length */\\n    if ((huart->Init.WordLength == UART_WORDLENGTH_9B) && (huart->Init.Parity == UART_PARITY_NONE))\\n    {\\n      huart->TxISR = UART_TxISR_16BIT;\\n    }\\n    else\\n    {\\n      huart->TxISR = UART_TxISR_8BIT;\\n    }\\n\\n    /* Enable the Transmit Data Register Empty interrupt */\\n    ATOMIC_SET_BIT(huart->Instance->CR1, USART_CR1_TXEIE);\\n\\n    return HAL_OK;\\n  }\\n  else\\n  {\\n    return HAL_BUSY;\\n  }\\n}\\n', function_content_in_lines={'1259': 'HAL_StatusTypeDef HAL_UART_Transmit_IT(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size)', '1260': '{', '1261': '  /* Check that a Tx process is not already ongoing */', '1262': '  if (huart->gState == HAL_UART_STATE_READY)', '1263': '  {', '1264': '    if ((pData == NULL) || (Size == 0U))', '1265': '    {', '1266': '      return HAL_ERROR;', '1267': '    }', '1268': '', '1269': '    huart->pTxBuffPtr  = pData;', '1270': '    huart->TxXferSize  = Size;', '1271': '    huart->TxXferCount = Size;', '1272': '    huart->TxISR       = NULL;', '1273': '', '1274': '    huart->ErrorCode = HAL_UART_ERROR_NONE;', '1275': '    huart->gState = HAL_UART_STATE_BUSY_TX;', '1276': '', '1277': '    /* Set the Tx ISR function pointer according to the data word length */', '1278': '    if ((huart->Init.WordLength == UART_WORDLENGTH_9B) && (huart->Init.Parity == UART_PARITY_NONE))', '1279': '    {', '1280': '      huart->TxISR = UART_TxISR_16BIT;', '1281': '    }', '1282': '    else', '1283': '    {', '1284': '      huart->TxISR = UART_TxISR_8BIT;', '1285': '    }', '1286': '', '1287': '    /* Enable the Transmit Data Register Empty interrupt */', '1288': '    ATOMIC_SET_BIT(huart->Instance->CR1, USART_CR1_TXEIE);', '1289': '', '1290': '    return HAL_OK;', '1291': '  }', '1292': '  else', '1293': '  {', '1294': '    return HAL_BUSY;', '1295': '  }', '1296': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "dc65664c-4609-47e9-a2c4-65e9efa5f9b6",
+      "tool_call_id": "call_00_1MTaNauF5eRb4xZ31O5VRjo9",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me check if there's a `UART_WriteNonBlocking` function by searching for \"NonBlocking\" in the function names. First, let me register and analyze the database to get better search capabilities:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 76,
+          "prompt_tokens": 15924,
+          "total_tokens": 16000,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 14720
+          },
+          "prompt_cache_hit_tokens": 14720,
+          "prompt_cache_miss_tokens": 1204
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "67d05fbc-0018-4734-99c2-3b3e61d36e8c",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--aeb514d9-3e00-4f33-bf2d-aaa48662e0be-0",
+      "tool_calls": [
+        {
+          "name": "register_and_analyze_database",
+          "args": {},
+          "id": "call_00_5DMJ4fFALapuR54HQziChynP",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 15924,
+        "output_tokens": 76,
+        "total_tokens": 16000,
+        "input_token_details": {
+          "cache_read": 14720
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Database registered and analyzed: /Users/jie/Documents/workspace/lcmhalgen/LCMHalTest_DBS/DATABASE_FreeRTOSLwIP_StreamingServer",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "register_and_analyze_database",
+      "id": "6fc9201a-79a0-4d26-815a-f2325769c99a",
+      "tool_call_id": "call_00_5DMJ4fFALapuR54HQziChynP",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me search for functions with \"Write\" in their names:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 44,
+          "prompt_tokens": 16055,
+          "total_tokens": 16099,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 15936
+          },
+          "prompt_cache_hit_tokens": 15936,
+          "prompt_cache_miss_tokens": 119
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "19a303fa-0f99-4503-a454-bcac93df4a6f",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--bce80766-390f-4aab-b75a-18719ee3d23b-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_list",
+          "args": {},
+          "id": "call_00_hs5OZpjFVyidIGVgag8AGErs",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 16055,
+        "output_tokens": 44,
+        "total_tokens": 16099,
+        "input_token_details": {
+          "cache_read": 15936
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO function list: ['HAL_I2C_Mem_Read', 'HAL_I2C_Mem_Write', 'HAL_I2C_Slave_Receive', 'HAL_I2C_Slave_Transmit', 'HAL_I2C_Master_Receive', 'HAL_I2C_Master_Transmit', 'HAL_DMA2D_CLUTLoading_Abort', 'HAL_DMA2D_CLUTLoading_Suspend', 'ETH_Prepare_Tx_Descriptors', 'BSP_SDRAM_MspInit', 'BSP_SD_MspInit', 'BSP_SRAM_MspInit', 'HAL_DMA_Init', 'BSP_CAMERA_MspInit', 'HAL_GPIO_DeInit', 'I2C_IsErrorOccurred', 'BSP_COM_Init', 'BSP_PB_Init', 'BSP_LED_Init', 'MFX_IO_ITConfig', 'BSP_POTENTIOMETER_Init', 'I2Cx_MspInit', 'BSP_LCD_Reset', 'BSP_LCD_MspInit', 'HAL_PWREx_DisableOverDrive', 'HAL_PWREx_EnableOverDrive', 'HAL_RCCEx_PeriphCLKConfig', 'HAL_RCC_MCOConfig', 'HAL_RCC_OscConfig', 'HAL_GPIO_Init', 'HAL_ETH_MspInit', 'HAL_ETH_Init', 'HAL_I2CEx_DisableFastModePlus', 'HAL_I2CEx_EnableFastModePlus', 'HAL_DSI_ExitULPM', 'HAL_DSI_EnterULPM', 'HAL_DSI_ExitULPMData', 'HAL_DSI_Stop', 'HAL_DSI_Start', 'HAL_DSI_DeInit', 'HAL_DSI_Init', 'HAL_PWREx_EnterUnderDriveSTOPMode', 'HAL_PWREx_ControlVoltageScaling', 'HAL_InitTick', 'SystemClock_Config', 'HAL_I2C_IsDeviceReady', 'HAL_FLASHEx_Erase', 'ETH_DMARxDescListInit', 'ETH_DMATxDescListInit', 'HAL_RCC_ClockConfig', 'HAL_DMA_IRQHandler', 'HAL_DMA_Abort', 'HAL_DMA2D_PollForTransfer', 'HAL_DMA2D_Abort', 'HAL_DMA2D_Suspend', 'UART_SetConfig', 'HAL_TIMEx_OnePulseN_Stop_IT', 'HAL_TIMEx_OnePulseN_Stop', 'HAL_TIMEx_PWMN_Stop_DMA', 'HAL_TIMEx_PWMN_Stop_IT', 'HAL_TIMEx_PWMN_Stop', 'HAL_TIMEx_OCN_Stop_DMA', 'HAL_TIMEx_OCN_Stop_IT', 'HAL_TIMEx_OCN_Stop', 'HAL_TIMEx_HallSensor_Stop_DMA', 'HAL_TIMEx_HallSensor_Stop_IT', 'HAL_TIMEx_HallSensor_Stop', 'HAL_TIM_Encoder_Stop_DMA', 'HAL_TIM_Encoder_Stop_IT', 'HAL_TIM_Encoder_Stop', 'HAL_TIM_OnePulse_Stop_IT', 'HAL_TIM_OnePulse_Stop', 'HAL_TIM_IC_Stop_DMA', 'HAL_TIM_IC_Stop_IT', 'HAL_TIM_IC_Stop', 'HAL_TIM_PWM_Stop_DMA', 'HAL_TIM_PWM_Stop_IT', 'HAL_TIM_PWM_Stop', 'HAL_TIM_OC_Stop_DMA', 'HAL_TIM_OC_Stop_IT', 'HAL_TIM_OC_Stop', 'HAL_ETH_ReadPHYRegister', 'HAL_ETH_WritePHYRegister', 'HAL_RCCEx_EnablePLLSAI', 'HAL_RCCEx_EnablePLLI2S', 'HAL_DSI_Read', 'I2C_WaitOnRXNEFlagUntilTimeout', 'HAL_ETH_Transmit', 'ETH_UpdateDescriptor', 'HAL_ETH_ReadData', 'HAL_ETH_Transmit_IT', 'HAL_ETH_SetWakeUpFilter', 'HAL_DSI_LongWrite', 'I2C_WaitOnFlagUntilTimeout', 'HAL_PWREx_DisableBkUpReg', 'HAL_TIMEx_HallSensor_DeInit', 'HAL_TIM_Encoder_DeInit', 'HAL_TIM_OnePulse_DeInit', 'HAL_TIM_IC_DeInit', 'HAL_TIM_PWM_DeInit', 'HAL_TIM_OC_DeInit', 'HAL_TIM_Base_Stop_DMA', 'HAL_TIM_Base_Stop_IT', 'HAL_TIM_Base_Stop', 'HAL_TIM_Base_DeInit', 'HAL_PWREx_EnableBkUpReg', 'HAL_DSI_EnterULPMData', 'HAL_RCCEx_DisablePLLSAI', 'HAL_RCCEx_DisablePLLI2S', 'HAL_RCC_DeInit', 'HAL_ETH_ReleaseTxPacket', 'FLASH_WaitForLastOperation', 'HAL_LTDC_DeInit', 'DSI_ShortWrite', 'I2C_WaitOnSTOPFlagUntilTimeout', 'I2C_WaitOnTXISFlagUntilTimeout']",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_list",
+      "id": "dc7e5f0a-6ee4-417b-a8fc-dd8a5489075e",
+      "tool_call_id": "call_00_hs5OZpjFVyidIGVgag8AGErs",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "I don't see `UART_WriteNonBlocking` in the MMIO function list. Let me check if there are any other UART-related functions. Let me look for functions with \"UART\" in their names:\n\nFrom the list, I can see `UART_SetConfig` is present. Let me check if there are other UART functions that might not be in the MMIO list. Let me search more broadly by looking at the UART driver file structure. Based on the file list I saw earlier, there is a `stm32f7xx_hal_uart.c` file. Let me check if there are other UART functions that might not be classified as MMIO functions.\n\nSince `UART_WriteNonBlocking` is not found in the database, it's possible that:\n1. The function doesn't exist in this codebase\n2. It has a different name\n3. It's in a different file not included in the database\n\nLet me check if there are any BSP or application-specific UART functions. Looking at the file list, I see there are BSP files like `stm32f769i_eval_io.c` which might contain UART functions. Let me check that file:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 306,
+          "prompt_tokens": 17361,
+          "total_tokens": 17667,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 16064
+          },
+          "prompt_cache_hit_tokens": 16064,
+          "prompt_cache_miss_tokens": 1297
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "e78a21e4-75dc-4489-8d4a-36f33b0a784c",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--ca512913-bc23-4352-9ff4-c7bf7e4ad2ba-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "BSP_COM_Init"
+          },
+          "id": "call_00_GGlbldT6YYbkPpxxas3DhzCi",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 17361,
+        "output_tokens": 306,
+        "total_tokens": 17667,
+        "input_token_details": {
+          "cache_read": 16064
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='BSP_COM_Init', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', location_line=425, function_content='/**\\n* @brief  Configures COM port.\\n* @param  COM: COM port to be configured.\\n*          This parameter can be one of the following values:\\n*            @arg  COM1\\n*            @arg  COM2\\n* @param  huart: Pointer to a UART_HandleTypeDef structure that contains the\\n*                configuration information for the specified USART peripheral.\\n* @retval None\\n*/\\nvoid BSP_COM_Init(COM_TypeDef COM, UART_HandleTypeDef *huart)\\n{\\n  GPIO_InitTypeDef gpio_init_structure;\\n\\n  /* Enable GPIO clock */\\n  EVAL_COMx_TX_GPIO_CLK_ENABLE(COM);\\n  EVAL_COMx_RX_GPIO_CLK_ENABLE(COM);\\n\\n  /* Enable USART clock */\\n  EVAL_COMx_CLK_ENABLE(COM);\\n\\n  /* Configure USART Tx as alternate function */\\n  gpio_init_structure.Pin = COM_TX_PIN[COM];\\n  gpio_init_structure.Mode = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Speed = GPIO_SPEED_FREQ_HIGH;\\n  gpio_init_structure.Pull = GPIO_PULLUP;\\n  gpio_init_structure.Alternate = COM_TX_AF[COM];\\n  HAL_GPIO_Init(COM_TX_PORT[COM], &gpio_init_structure);\\n\\n  /* Configure USART Rx as alternate function */\\n  gpio_init_structure.Pin = COM_RX_PIN[COM];\\n  gpio_init_structure.Mode = GPIO_MODE_AF_PP;\\n  gpio_init_structure.Alternate = COM_RX_AF[COM];\\n  HAL_GPIO_Init(COM_RX_PORT[COM], &gpio_init_structure);\\n\\n  /* USART configuration */\\n  huart->Instance = COM_USART[COM];\\n  HAL_UART_Init(huart);\\n}\\n', function_content_in_lines={'425': 'void BSP_COM_Init(COM_TypeDef COM, UART_HandleTypeDef *huart)', '426': '{', '427': '  GPIO_InitTypeDef gpio_init_structure;', '428': '', '429': '  /* Enable GPIO clock */', '430': '  EVAL_COMx_TX_GPIO_CLK_ENABLE(COM);', '431': '  EVAL_COMx_RX_GPIO_CLK_ENABLE(COM);', '432': '', '433': '  /* Enable USART clock */', '434': '  EVAL_COMx_CLK_ENABLE(COM);', '435': '', '436': '  /* Configure USART Tx as alternate function */', '437': '  gpio_init_structure.Pin = COM_TX_PIN[COM];', '438': '  gpio_init_structure.Mode = GPIO_MODE_AF_PP;', '439': '  gpio_init_structure.Speed = GPIO_SPEED_FREQ_HIGH;', '440': '  gpio_init_structure.Pull = GPIO_PULLUP;', '441': '  gpio_init_structure.Alternate = COM_TX_AF[COM];', '442': '  HAL_GPIO_Init(COM_TX_PORT[COM], &gpio_init_structure);', '443': '', '444': '  /* Configure USART Rx as alternate function */', '445': '  gpio_init_structure.Pin = COM_RX_PIN[COM];', '446': '  gpio_init_structure.Mode = GPIO_MODE_AF_PP;', '447': '  gpio_init_structure.Alternate = COM_RX_AF[COM];', '448': '  HAL_GPIO_Init(COM_RX_PORT[COM], &gpio_init_structure);', '449': '', '450': '  /* USART configuration */', '451': '  huart->Instance = COM_USART[COM];', '452': '  HAL_UART_Init(huart);', '453': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "1519b65a-ea0d-4adc-805d-14aaa4ab7dd7",
+      "tool_call_id": "call_00_GGlbldT6YYbkPpxxas3DhzCi",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Based on my analysis of the available database and files, I cannot find a function named `UART_WriteNonBlocking` in the current codebase. However, I can analyze what such a function would likely do based on the naming convention and typical UART driver patterns.\n\n## Analysis of `UART_WriteNonBlocking` (Hypothetical)\n\nBased on the function name `UART_WriteNonBlocking`, I can infer:\n\n1. **Function Purpose**: This function would perform UART data transmission in a non-blocking manner, meaning it would not wait for the transmission to complete before returning.\n\n2. **Typical Characteristics**:\n   - It would likely be similar to `HAL_UART_Transmit_IT` (interrupt-based transmission)\n   - It would set up the transmission and return immediately\n   - It would use interrupts or DMA to handle the actual data transfer\n   - It would manage transmission state in the UART handle structure\n\n3. **Classification**: Based on the naming and typical implementation patterns:\n\n**Category: RECV** (Data Transmission/Reception Functions)\n\n**Reasoning**:\n- The function performs data transmission (write/send) operations\n- It's a UART communication function that handles data I/O\n- Non-blocking write functions typically initiate data transmission and rely on interrupts or DMA for completion\n- This is a critical data I/O operation that would need to be redirected to POSIX-equivalent interfaces\n\n**Replacement Strategy**:\n- Since this is a transmission (write) function, we would need to redirect the output\n- Could use `HAL_BE_Out()` or similar output mechanism\n- Would need to preserve the non-blocking behavior by returning immediately after initiating the output\n- Would need to handle the UART handle state management appropriately\n\nHowever, since the actual function `UART_WriteNonBlocking` is not found in the database, I cannot provide a specific analysis of its implementation. If this function exists in your actual codebase but wasn't captured in the database, you would need to:\n\n1. Provide the actual function code for analysis\n2. Or check if it has a different name (e.g., `HAL_UART_Transmit_DMA`, `HAL_UART_Transmit_IT`, or a custom BSP function)\n\n**Recommendation**: Please verify the exact function name and provide the function code if available, or check if it might be named differently in your codebase.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 510,
+          "prompt_tokens": 18692,
+          "total_tokens": 19202,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 17664
+          },
+          "prompt_cache_hit_tokens": 17664,
+          "prompt_cache_miss_tokens": 1028
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "03464d4a-600e-4a31-a0bf-939bcecca3c0",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--f524c241-aa65-4a7b-9f5d-c593c7c866ad-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 18692,
+        "output_tokens": 510,
+        "total_tokens": 19202,
+        "input_token_details": {
+          "cache_read": 17664
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "UART_WriteNonBlocking",
+    "function_type": "RECV",
+    "functionality": "UART data transmission in non-blocking mode (hypothetical based on function name)",
+    "classification_reason": "Based on the function name 'UART_WriteNonBlocking', this appears to be a data transmission function that performs UART write operations in a non-blocking manner. Such functions typically handle critical data I/O operations and would need to be redirected to POSIX-equivalent interfaces for data transmission. The function name suggests it initiates data transmission without waiting for completion, which is characteristic of RECV-type functions that handle data transfer operations.",
+    "has_replacement": false,
+    "function_replacement": ""
+  }
+}
