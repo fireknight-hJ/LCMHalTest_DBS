@@ -1,0 +1,415 @@
+{
+  "messages": [
+    {
+      "content": "\nYou are an embedded software engineer. Your task is to replace specific functions in the driver library to decouple them from peripheral hardware dependencies (such as I/O operations and various peripheral registers), while preserving the normal functionality of the functions and MCU operations (including OS scheduling and interrupt triggering, etc.).\n\nYou have already replaced the code of some functions containing MMIO and driver operations with specified replacement functions and successfully compiled the project. Next, I need you to dynamically run the firmware program to verify the correctness of the replacement functions. If there are issues during program execution, you need to modify the driver source code based on the error feedback, recompile, and run it again until the program executes without problems.\n\nPlease use the following verification criteria to determine whether the program execution is correct:\n1. The program does not enter an infinite loop\n2. The program executes normally without exceptions such as erroneous address access\n3. The program successfully enters the main function\n\nIf you suspect there are issues with program execution, you need to troubleshoot and fix the problem by following these steps. The solution is to first confirm whether a certain driver function is causing the problem. Based on the error feedback, modify the driver source code, recompile, and run it until the program executes without issues.\n\n1. Use provided tool `Emulator` to emulate the project. After emulation, check whether the program execution meets expectations. If not, proceed to the next step.\n2. Use provided tool-agent `Fixer` to obtain and analyze logs of the emulator's execution (function calls, MMIO function calls, etc.), determine if a specific driver function is causing the problem. Based on the error feedback, modify the corresponding driver source code.\n3. Use provided tool-agent `Builder` to rebuild the project, then run it to verify if the issues are resolved, if not, repeat from step 2.\nRepeate this process until the program executes without issues.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "c54f4d90-0346-4aa4-845c-d18e1fd74095"
+    },
+    {
+      "content": "Emulate the project, rerun-fix-rebuild the project until the project is successfully run.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "044fd64f-5ea3-499c-a690-8b19da2635d9"
+    },
+    {
+      "content": "I'll start by emulating the project to see if it runs correctly. Let me first check what files are available in the project.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 57,
+          "prompt_tokens": 1383,
+          "total_tokens": 1440,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1344
+          },
+          "prompt_cache_hit_tokens": 1344,
+          "prompt_cache_miss_tokens": 39
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "23c4c4ab-42da-4686-b187-98988b7548bb",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35df-808e-7553-ac60-bd5f00b81380-0",
+      "tool_calls": [
+        {
+          "name": "list_files_in_db_zip",
+          "args": {},
+          "id": "call_00_3aG5CrccuYTCde0M55Y1WcY7",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 1383,
+        "output_tokens": 57,
+        "total_tokens": 1440,
+        "input_token_details": {
+          "cache_read": 1344
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Files in src.zip: ['home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/camera.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/idd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/io.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/Common/ts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/dp83848/dp83848.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/dp83848/dp83848.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/mfxstm32l152/mfxstm32l152.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/otm8009a/otm8009a.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/otm8009a/otm8009a.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/ov5640/ov5640.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/s5k5cag/s5k5cag.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/stmpe811/stmpe811.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/Components/stmpe811/stmpe811.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_camera.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_io.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_io.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_lcd.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_lcd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sd.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sdram.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sdram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/BSP/STM32F769I_EVAL/stm32f769i_eval_sram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Device/ST/STM32F7xx/Include/stm32f769xx.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Device/ST/STM32F7xx/Include/stm32f7xx.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Device/ST/STM32F7xx/Include/system_stm32f7xx.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/cmsis_compiler.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/cmsis_gcc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/cmsis_version.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/core_cm7.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/CMSIS/Include/mpu_armv7.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_adc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_adc_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_cortex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dcmi.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_def.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma2d.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dma_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_dsi.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_eth.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_flash.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_flash_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_gpio.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_gpio_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_i2c_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_ltdc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_ltdc_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_mdios.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_nor.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_pwr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_pwr_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_rcc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_rcc_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sai.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sd.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sdram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_sram.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_tim.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_tim_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_uart.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_uart_ex.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_ll_fmc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_ll_sdmmc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/Legacy/stm32_hal_legacy.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dcmi_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma2d.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dma_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_dsi.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_flash_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_gpio.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_i2c_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_ltdc.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_ltdc_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_pwr_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_sdram.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_tim.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_tim_ex.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_uart.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_ll_fmc.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/FreeRTOSConfig.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/app_ethernet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/encode.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/ethernetif.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/jconfig.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/jdata_conf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/jmorecfg.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/lcd_log_conf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/lwipopts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/main.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/rtp_protocol.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/rtsp_protocol.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/s5k5cag_RGB888.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/stm32f769i_camera.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/stm32f7xx_hal_conf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Inc/stm32f7xx_it.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/list.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/portable.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/queue.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/task.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/include/timers.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM0/portmacro.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LibJPEG/include/jpeglib.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/compat/stdc/errno.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/arch.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/debug.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/def.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/err.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/errno.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/etharp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/inet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip4.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip4_addr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip6_addr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/ip_addr.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/mem.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/memp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/netif.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/opt.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/pbuf.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/snmp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/sockets.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/stats.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/sys.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/tcpip.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/timeouts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/priv/mem_priv.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/priv/memp_priv.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/priv/memp_std.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/etharp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/ethernet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/ieee.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/lwip/prot/ip4.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/netif/etharp.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/src/include/netif/ethernet.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/system/arch/cc.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/system/arch/cpu.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Middlewares/Third_Party/LwIP/system/arch/sys_arch.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/SW4STM32/syscalls.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/app_ethernet.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/encode.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/ethernetif.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/main.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/rtp_protocol.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/rtsp_protocol.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/s5k5cag_RGB888.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f769i_camera.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f7xx_hal_timebase_tim.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/stm32f7xx_it.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/system_stm32f7xx.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font12.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font16.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font20.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font24.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/font8.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Fonts/fonts.h', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Log/lcd_log.c', 'home/haojie/posixGen_Demos/LwIP_StreamingServer/Utilities/Log/lcd_log.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/_ansi.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/_newlib_version.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/alloca.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/assert.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/ctype.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/inttypes.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/limits.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/reent.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/stdint.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/stdio.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/stdlib.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/string.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/strings.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/unistd.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_default_types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_endian.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/_types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/endian.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/ieeefp.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/stdlib.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/machine/types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/newlib-nano/newlib.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_default_fcntl.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_intsup.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_locale.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_pthreadtypes.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_sigset.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_stdint.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_timespec.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_timeval.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/_types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/cdefs.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/config.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/fcntl.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/features.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/lock.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/reent.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/sched.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/select.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/stat.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/stdio.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/string.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/syslimits.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/time.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/times.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/timespec.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/types.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/unistd.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/arm-none-eabi/include/sys/wait.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include/stdarg.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include/stddef.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include/stdint.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include-fixed/limits.h', 'usr/lib/gcc-arm-none-eabi-10.3-2021.10/lib/gcc/arm-none-eabi/10.3.1/include-fixed/syslimits.h']",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "list_files_in_db_zip",
+      "id": "40148cf5-6e0b-432f-9684-856aeb44b9f5",
+      "tool_call_id": "call_00_3aG5CrccuYTCde0M55Y1WcY7",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me register and analyze the database to understand the project structure better:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 46,
+          "prompt_tokens": 10061,
+          "total_tokens": 10107,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 1408
+          },
+          "prompt_cache_hit_tokens": 1408,
+          "prompt_cache_miss_tokens": 8653
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "40b706c7-1bf2-4c68-a9f8-dfdb5d7074cc",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35df-948f-7dd3-8c8e-ad673b36f5ff-0",
+      "tool_calls": [
+        {
+          "name": "register_and_analyze_database",
+          "args": {},
+          "id": "call_00_7Q7vLBPUviN7ckGVI16pd49F",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 10061,
+        "output_tokens": 46,
+        "total_tokens": 10107,
+        "input_token_details": {
+          "cache_read": 1408
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Database registered and analyzed: /Users/jie/Documents/workspace/lcmhalgen/LCMHalTest_DBS/DATABASE_FreeRTOSLwIP_StreamingServer",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "register_and_analyze_database",
+      "id": "fe5bcfb0-9fe3-4a6d-901c-a4f4c0d6782c",
+      "tool_call_id": "call_00_7Q7vLBPUviN7ckGVI16pd49F",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me emulate the project to see if it runs correctly:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 41,
+          "prompt_tokens": 10162,
+          "total_tokens": 10203,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 10048
+          },
+          "prompt_cache_hit_tokens": 10048,
+          "prompt_cache_miss_tokens": 114
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "aa1b214c-b70c-4814-9d85-625d44f81880",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35df-abc8-7031-a152-828752a49ae0-0",
+      "tool_calls": [
+        {
+          "name": "emulate_proj",
+          "args": {},
+          "id": "call_00_ETzcL9TLvyOehESrKhqRSmzq",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 10162,
+        "output_tokens": 41,
+        "total_tokens": 10203,
+        "input_token_details": {
+          "cache_read": 10048
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "{\"std_out\":\"\",\"std_err\":\"0.00s - Debugger warning: It seems that frozen modules are being used, which may\\n0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\\n0.00s - to python to disable frozen modules.\\n0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\\n/Users/jie/.virtualenvs/lcmhalenv/lib/python3.13/site-packages/unicorn/unicorn.py:8: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.\\n  import pkg_resources\\n\",\"exit_code\":255}",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "emulate_proj",
+      "id": "21396499-2f19-464b-a5b6-c79dc0ada4c5",
+      "tool_call_id": "call_00_ETzcL9TLvyOehESrKhqRSmzq",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "The emulation failed with exit code 255. Let me check what MMIO functions are being used in the project to understand what might need to be fixed:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 62,
+          "prompt_tokens": 10428,
+          "total_tokens": 10490,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 10176
+          },
+          "prompt_cache_hit_tokens": 10176,
+          "prompt_cache_miss_tokens": 252
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "ae75c7a3-9912-41d7-a844-d514225282c2",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35df-ca90-7502-80cf-715d8be5cbf7-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_list",
+          "args": {},
+          "id": "call_00_ylG8QCTpkofYCfAcAVLEDcVH",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 10428,
+        "output_tokens": 62,
+        "total_tokens": 10490,
+        "input_token_details": {
+          "cache_read": 10176
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO function list: ['HAL_I2C_Mem_Read', 'HAL_I2C_Mem_Write', 'HAL_I2C_Slave_Receive', 'HAL_I2C_Slave_Transmit', 'HAL_I2C_Master_Receive', 'HAL_I2C_Master_Transmit', 'HAL_DMA2D_CLUTLoading_Abort', 'HAL_DMA2D_CLUTLoading_Suspend', 'ETH_Prepare_Tx_Descriptors', 'BSP_SDRAM_MspInit', 'BSP_SD_MspInit', 'BSP_SRAM_MspInit', 'HAL_DMA_Init', 'BSP_CAMERA_MspInit', 'HAL_GPIO_DeInit', 'I2C_IsErrorOccurred', 'BSP_COM_Init', 'BSP_PB_Init', 'BSP_LED_Init', 'MFX_IO_ITConfig', 'BSP_POTENTIOMETER_Init', 'I2Cx_MspInit', 'BSP_LCD_Reset', 'BSP_LCD_MspInit', 'HAL_PWREx_DisableOverDrive', 'HAL_PWREx_EnableOverDrive', 'HAL_RCCEx_PeriphCLKConfig', 'HAL_RCC_MCOConfig', 'HAL_RCC_OscConfig', 'HAL_GPIO_Init', 'HAL_ETH_MspInit', 'HAL_ETH_Init', 'HAL_I2CEx_DisableFastModePlus', 'HAL_I2CEx_EnableFastModePlus', 'HAL_DSI_ExitULPM', 'HAL_DSI_EnterULPM', 'HAL_DSI_ExitULPMData', 'HAL_DSI_Stop', 'HAL_DSI_Start', 'HAL_DSI_DeInit', 'HAL_DSI_Init', 'HAL_PWREx_EnterUnderDriveSTOPMode', 'HAL_PWREx_ControlVoltageScaling', 'HAL_InitTick', 'SystemClock_Config', 'HAL_I2C_IsDeviceReady', 'HAL_FLASHEx_Erase', 'ETH_DMARxDescListInit', 'ETH_DMATxDescListInit', 'HAL_RCC_ClockConfig', 'HAL_DMA_IRQHandler', 'HAL_DMA_Abort', 'HAL_DMA2D_PollForTransfer', 'HAL_DMA2D_Abort', 'HAL_DMA2D_Suspend', 'UART_SetConfig', 'HAL_TIMEx_OnePulseN_Stop_IT', 'HAL_TIMEx_OnePulseN_Stop', 'HAL_TIMEx_PWMN_Stop_DMA', 'HAL_TIMEx_PWMN_Stop_IT', 'HAL_TIMEx_PWMN_Stop', 'HAL_TIMEx_OCN_Stop_DMA', 'HAL_TIMEx_OCN_Stop_IT', 'HAL_TIMEx_OCN_Stop', 'HAL_TIMEx_HallSensor_Stop_DMA', 'HAL_TIMEx_HallSensor_Stop_IT', 'HAL_TIMEx_HallSensor_Stop', 'HAL_TIM_Encoder_Stop_DMA', 'HAL_TIM_Encoder_Stop_IT', 'HAL_TIM_Encoder_Stop', 'HAL_TIM_OnePulse_Stop_IT', 'HAL_TIM_OnePulse_Stop', 'HAL_TIM_IC_Stop_DMA', 'HAL_TIM_IC_Stop_IT', 'HAL_TIM_IC_Stop', 'HAL_TIM_PWM_Stop_DMA', 'HAL_TIM_PWM_Stop_IT', 'HAL_TIM_PWM_Stop', 'HAL_TIM_OC_Stop_DMA', 'HAL_TIM_OC_Stop_IT', 'HAL_TIM_OC_Stop', 'HAL_ETH_ReadPHYRegister', 'HAL_ETH_WritePHYRegister', 'HAL_RCCEx_EnablePLLSAI', 'HAL_RCCEx_EnablePLLI2S', 'HAL_DSI_Read', 'I2C_WaitOnRXNEFlagUntilTimeout', 'HAL_ETH_Transmit', 'ETH_UpdateDescriptor', 'HAL_ETH_ReadData', 'HAL_ETH_Transmit_IT', 'HAL_ETH_SetWakeUpFilter', 'HAL_DSI_LongWrite', 'I2C_WaitOnFlagUntilTimeout', 'HAL_PWREx_DisableBkUpReg', 'HAL_TIMEx_HallSensor_DeInit', 'HAL_TIM_Encoder_DeInit', 'HAL_TIM_OnePulse_DeInit', 'HAL_TIM_IC_DeInit', 'HAL_TIM_PWM_DeInit', 'HAL_TIM_OC_DeInit', 'HAL_TIM_Base_Stop_DMA', 'HAL_TIM_Base_Stop_IT', 'HAL_TIM_Base_Stop', 'HAL_TIM_Base_DeInit', 'HAL_PWREx_EnableBkUpReg', 'HAL_DSI_EnterULPMData', 'HAL_RCCEx_DisablePLLSAI', 'HAL_RCCEx_DisablePLLI2S', 'HAL_RCC_DeInit', 'HAL_ETH_ReleaseTxPacket', 'FLASH_WaitForLastOperation', 'HAL_LTDC_DeInit', 'DSI_ShortWrite', 'I2C_WaitOnSTOPFlagUntilTimeout', 'I2C_WaitOnTXISFlagUntilTimeout']",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_list",
+      "id": "55e6e840-a86a-4afb-a5b1-3fbcc27f827a",
+      "tool_call_id": "call_00_ylG8QCTpkofYCfAcAVLEDcVH",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me get more detailed information about the emulation error by checking the function calls:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 49,
+          "prompt_tokens": 11752,
+          "total_tokens": 11801,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 10432
+          },
+          "prompt_cache_hit_tokens": 10432,
+          "prompt_cache_miss_tokens": 1320
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "e2ac5121-0b0d-4e80-8e99-4b635a4baf64",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35df-e065-7d62-aa15-6380799449e2-0",
+      "tool_calls": [
+        {
+          "name": "function_calls_emulate_info",
+          "args": {},
+          "id": "call_00_r3wT8P2FrocKnWh6mb3GPw7q",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 11752,
+        "output_tokens": 49,
+        "total_tokens": 11801,
+        "input_token_details": {
+          "cache_read": 10432
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "1 0x0 irq 0x0-> 0x802744c Reset_Handler (from 0x0 None)\n\t2 0x8027452 irq 0x0-> 0x802745c LoopCopyDataInit (from 0x802744c Reset_Handler)\n\t\t3 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t4 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t5 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t6 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t7 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t8 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t9 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t10 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t11 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t12 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t13 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t14 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t15 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t16 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t17 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t18 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t19 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t20 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t21 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t22 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t23 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t24 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t25 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t26 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t27 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t28 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t29 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t30 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t31 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t32 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t33 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t34 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t35 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t36 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t37 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t38 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t39 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t40 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t41 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t42 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t43 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t44 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t45 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t46 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t47 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t48 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t49 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t50 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t51 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t52 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t53 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t54 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t55 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t56 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t57 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t58 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t59 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t60 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t61 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t62 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t63 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t64 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t65 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t66 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t67 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t68 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t69 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t70 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t71 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t72 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t73 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t74 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t75 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t76 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t77 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t78 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t79 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t80 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t81 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t82 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t83 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t84 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t85 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t86 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t87 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t88 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t89 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t90 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t91 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t92 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t93 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t94 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t95 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t96 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t97 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t98 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t99 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t100 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t101 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t102 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t103 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t104 0x8027464 irq 0x0-> 0x8027454 CopyDataInit (from 0x802745c LoopCopyDataInit)\n\t\t106 0x8027468 irq 0x0-> 0x8021908 SystemInit (from 0x802745c LoopCopyDataInit)\n\t\t108 0x802746c irq 0x0-> 0x802798c __libc_init_array (from 0x802745c LoopCopyDataInit)\n\t\t\t110 0x802799c irq 0x0-> 0x80288d0 _init (from 0x802798c __libc_init_array)\n\t\t\t113 0x80279be irq 0x0-> 0x8000318 frame_dummy (from 0x802798c __libc_init_array)\n\t\t\t\t115 0x800032a irq 0x0-> 0x80002cc register_tm_clones (from 0x8000318 frame_dummy)\n\t\t121 0x8027470 irq 0x0-> 0x8025350 main (from 0x802745c LoopCopyDataInit)\n\t\t\t122 0x8025356 irq 0x0-> 0x80255fc MPU_Config (from 0x8025350 main)\n\t\t\t\t123 0x8025602 irq 0x0-> 0x801be88 HAL_MPU_Disable (from 0x80255fc MPU_Config)\n\t\t\t\t125 0x8025636 irq 0x0-> 0x801bef8 HAL_MPU_ConfigRegion (from 0x80255fc MPU_Config)\n\t\t\t\t127 0x802566a irq 0x0-> 0x801bef8 HAL_MPU_ConfigRegion (from 0x80255fc MPU_Config)\n\t\t\t\t129 0x802569e irq 0x0-> 0x801bef8 HAL_MPU_ConfigRegion (from 0x80255fc MPU_Config)\n\t\t\t\t131 0x80256d4 irq 0x0-> 0x801bef8 HAL_MPU_ConfigRegion (from 0x80255fc MPU_Config)\n\t\t\t\t133 0x802570a irq 0x0-> 0x801bef8 HAL_MPU_ConfigRegion (from 0x80255fc MPU_Config)\n\t\t\t\t135 0x8025710 irq 0x0-> 0x801beb8 HAL_MPU_Enable (from 0x80255fc MPU_Config)\n\t\t\t139 0x802535a irq 0x0-> 0x8025804 CPU_CACHE_Enable (from 0x8025350 main)\n\t\t\t\t140 0x8025808 irq 0x0-> 0x802527c SCB_EnableICache (from 0x8025804 CPU_CACHE_Enable)\n\t\t\t\t145 0x802580c irq 0x0-> 0x80252c8 SCB_EnableDCache (from 0x8025804 CPU_CACHE_Enable)\n\t\t\t151 0x802535e irq 0x0-> 0x801bbf4 HAL_Init (from 0x8025350 main)\n\t\t\t\t154 0x801bc12 irq 0x0-> 0x801be1e HAL_NVIC_SetPriorityGrouping (from 0x801bbf4 HAL_Init)\n\t\t\t\t\t155 0x801be28 irq 0x0-> 0x801bcc4 __NVIC_SetPriorityGrouping (from 0x801be1e HAL_NVIC_SetPriorityGrouping)\n\t\t\t\t158 0x801bc18 irq 0x0-> 0x80271f2 HAL_InitTick (from 0x801bbf4 HAL_Init)\n\t\t\t\t160 0x801bc1c irq 0x0-> 0x801bc2c HAL_MspInit (from 0x801bbf4 HAL_Init)\n\t\t\t163 0x8025362 irq 0x0-> 0x8025724 SystemClock_Config (from 0x8025350 main)\n\t\t\t\t164 0x8025790 irq 0x0-> 0x8020514 HAL_RCC_OscConfig (from 0x8025724 SystemClock_Config)\n\t\t\t\t\t172 0x80205f4 irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t176 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t180 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t184 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t188 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t192 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t196 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t200 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t204 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t208 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t212 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t216 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t220 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t224 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t228 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t232 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t236 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t240 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t244 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t248 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t252 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t256 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t260 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t264 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t268 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t272 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t276 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t280 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t284 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t288 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t292 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t296 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t300 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t304 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t308 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t312 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t316 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t320 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t324 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t328 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t332 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t336 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t340 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t344 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t348 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t352 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t356 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t360 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t364 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t368 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t372 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t376 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t380 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t384 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t388 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t392 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t396 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t400 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t404 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t408 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t412 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t416 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t420 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t424 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t428 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t432 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t436 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t440 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t444 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t448 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t452 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t456 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t460 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t464 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t468 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t472 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t476 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t480 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t484 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t488 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t492 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t496 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t500 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t504 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t508 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t512 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t516 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t520 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t524 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t528 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t532 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t536 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t540 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t544 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t548 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t552 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t556 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t560 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t564 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t568 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t572 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t576 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t580 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t584 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t588 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t592 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t596 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t600 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t604 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t608 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t612 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t616 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t620 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t624 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t628 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t632 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t636 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t640 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t644 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t648 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t652 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t656 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t660 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t664 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t668 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t672 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t676 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t680 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t684 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t688 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t692 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t696 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t700 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t704 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t708 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t712 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t716 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t720 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t724 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t728 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t732 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t736 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t740 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t744 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t748 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t752 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t756 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t760 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t764 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t768 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t772 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t776 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t780 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t784 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t788 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t792 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t796 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t800 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t804 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t808 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t812 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t816 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t820 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t824 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t828 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t832 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t836 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t840 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t844 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t848 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t852 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t856 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t860 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t864 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t868 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t872 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t876 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t880 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t884 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t888 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t892 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t896 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t900 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t904 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t908 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t912 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t916 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t920 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t924 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t928 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t932 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t936 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t940 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t944 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t948 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t952 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t956 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t960 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t964 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t968 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t972 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t976 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t980 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t984 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t988 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t992 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t996 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1000 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1004 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1008 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1012 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1016 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1020 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1024 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1028 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1032 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1036 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1040 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1044 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1048 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1052 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1056 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1060 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1064 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1068 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1072 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1076 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1080 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1084 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1088 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1092 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1096 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1100 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1104 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1108 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1112 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1116 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1120 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1124 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1128 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1132 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1136 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1140 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1144 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1148 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1152 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1156 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1160 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1164 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1168 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1172 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1176 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1180 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1184 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1188 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1192 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1196 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1200 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1204 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1208 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1212 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1216 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1220 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1224 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1228 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1232 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1236 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1240 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1244 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1248 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1252 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1256 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1260 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1264 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1268 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1272 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1276 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1280 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1284 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1288 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1292 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1296 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1300 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1304 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1308 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1312 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1316 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1320 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1324 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1328 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1332 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1336 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1340 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1344 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1348 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1352 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1356 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1360 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1364 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1368 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1372 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1376 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n\t\t\t\t\t1380 0x80205fc irq 0x0-> 0x801bc64 HAL_GetTick (from 0x8020514 HAL_RCC_OscConfig)\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "function_calls_emulate_info",
+      "id": "cd767979-ba0e-418e-8000-019e5aaeced0",
+      "tool_call_id": "call_00_r3wT8P2FrocKnWh6mb3GPw7q",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "I can see that the program is stuck in an infinite loop calling `HAL_GetTick` repeatedly from `HAL_RCC_OscConfig`. This suggests that the `HAL_RCC_OscConfig` function is waiting for some hardware status that isn't being properly simulated. Let me check the MMIO function emulation info to see what's happening:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 105,
+          "prompt_tokens": 28820,
+          "total_tokens": 28925,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11776
+          },
+          "prompt_cache_hit_tokens": 11776,
+          "prompt_cache_miss_tokens": 17044
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "38e5e704-bc19-4015-8f60-18e459c1e38e",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35df-f848-7bf0-8303-653161da7412-0",
+      "tool_calls": [
+        {
+          "name": "mmio_function_emulate_info",
+          "args": {},
+          "id": "call_00_Ecqm67BEsSjlcZf6VmGn5FTH",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 28820,
+        "output_tokens": 105,
+        "total_tokens": 28925,
+        "input_token_details": {
+          "cache_read": 11776
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "2025-12-19 17:10:16,523 - 0x801bc18 irq 0x0-> 0x80271f2 HAL_InitTick (from 0x801bbf4 HAL_Init)\n2025-12-19 17:10:16,524 - 0x8025362 irq 0x0-> 0x8025724 SystemClock_Config (from 0x8025350 main)\n2025-12-19 17:10:16,525 - 0x8025790 irq 0x0-> 0x8020514 HAL_RCC_OscConfig (from 0x8025724 SystemClock_Config)\n2025-12-19 17:10:16,664 - [-] Stop due to exceptional loop.\n2025-12-19 17:10:16,664 - current function: HAL_RCC_OscConfig\n2025-12-19 17:10:16,664 - current caller function: HAL_RCC_OscConfig\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "mmio_function_emulate_info",
+      "id": "12ce20cd-4194-417b-9b6c-079d995bd4ee",
+      "tool_call_id": "call_00_Ecqm67BEsSjlcZf6VmGn5FTH",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "The emulator detected an exceptional loop in `HAL_RCC_OscConfig`. This function is waiting for hardware status flags that aren't being properly simulated. Let me use the Fixer agent to analyze and fix this issue:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 72,
+          "prompt_tokens": 29168,
+          "total_tokens": 29240,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 28864
+          },
+          "prompt_cache_hit_tokens": 28864,
+          "prompt_cache_miss_tokens": 304
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "49435b75-29ba-41f1-9350-5b8c8634287f",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35e0-1b0b-7fa0-aea6-afddcabdeb1e-0",
+      "tool_calls": [
+        {
+          "name": "Fixer",
+          "args": {},
+          "id": "call_00_K2IMyRg18Gw6KK3ZmpHUtdoq",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 29168,
+        "output_tokens": 72,
+        "total_tokens": 29240,
+        "input_token_details": {
+          "cache_read": 28864
+        },
+        "output_token_details": {}
+      }
+    }
+  ]
+}

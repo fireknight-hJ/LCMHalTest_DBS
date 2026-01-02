@@ -1,0 +1,368 @@
+{
+  "messages": [
+    {
+      "content": "\n**Role**: You are an embedded software engineer tasked with replacing driver library functions to eliminate dependencies on peripheral hardware (I/O operations, register access, etc.) while preserving normal functionality and MCU-related operations (including OS scheduling and interrupt triggering).\n\n**Overall Process**:\n1.  **Analysis Phase**: Analyze the given C function to understand its MMIO accesses, call relationships, data structures used, and core logic.\n2.  **Classification Phase**: Categorize the function into one of the defined types based on the analysis.\n3.  **Processing Phase**:\n    *   For functions classified as **RECV, IRQ, INIT, or LOOP**: Generate the complete replacement code according to the specified strategy.\n    *   For functions classified as **RETURNOK, SKIP, NEEDCHECK, or NODRIVER**: Only provide the classification and reasoning. **Do not generate replacement code** unless explicitly requested later.\n\n---\n\n### **Function Classification and Replacement Strategy**\n\n#### **Priority 1: Functions Requiring Replacement (Generate Code)**\n1.  **RECV (Data Transmission/Reception Functions)**\n    *   **Identification**: Functions performing critical data I/O, DMA buffer management, or peripheral data transfer (read/write).\n    *   **Strategy**:\n        *   For **data reception**: Replace with calls to `HAL_BE_In(void* buf, int len)` (fixed size) or `HAL_BE_ENET_ReadFrame(void* buf, int length)` (variable length packet).\n        *   For **data transmission**: Redirect output to `stdout` (e.g., using `printf`) or, if non-critical and does not affect state, skip the operation.\n    *   **Critical**: Preserve all non-I/O logic (buffer pointer updates, state flags, data processing).\n\n2.  **IRQ (Interrupt-Related Functions)**\n    *   **Identification**: Interrupt handlers (e.g., `*_IRQHandler`) or functions containing interrupt enable/disable operations.\n    *   **Strategy**:\n        *   Remove actual hardware operations (e.g., writing to interrupt control registers).\n        *   **Preserve**: Interrupt flag checks, OS interrupt notifications (e.g., `xSemaphoreGiveFromISR`), state machine updates.\n        *   Ensure the execution flow can reach the original data handling or task triggering branches.\n\n3.  **INIT (Initialization Functions)**\n    *   **Identification**: Functions that initialize peripheral/configurations or allocate resources.\n    *   **Strategy**:\n        *   Remove all MMIO/register access operations.\n        *   Preserve resource allocation (e.g., `malloc`), structure initialization, and default value setting.\n        *   Ensure the logical post-initialization state matches the expected state after hardware init.\n\n4.  **LOOP (Peripheral-Dependent Loops)**\n    *   **Identification**: Loops where the condition or body depends on peripheral registers (e.g., polling status flags).\n    *   **Strategy**:\n        *   If waiting for a status flag: **Skip the loop entirely** (assume the condition is already met).\n        *   If reading data from a FIFO until empty: **Replace with a single read or a call to a simulation receive function**.\n        *   Add a comment explaining the original loop's purpose.\n    *   **Examples**:\n      ```c\n      /* Wait last char shifted out */\n      while (0U == (base->S1 & UART_S1_TC_MASK))\n      {\n      }\n      /* Rewrite: Skip the wait loop, assume transmission complete */\n      \n      /* Read base->D to clear overrun flag, otherwise the RX does not work. */\n      while ((base->S1 & UART_S1_RDRF_MASK) != 0U)\n      {\n          (void)base->D;\n      }\n      /* Rewrite: Skip the clearing loop or replace with a single simulated read */\n      ```\n\n#### **Priority 2: Classification Only (Do Not Generate Code Now)**\n5.  **RETURNOK (Pure Driver Operation Functions)**\n    *   **Identification**: Functions that only manipulate peripheral registers with no impact on upper-layer data structures.\n    *   **Strategy (Note)**: Would simply return a success value (e.g., `HAL_OK`, `0`) or a safe default.\n\n6.  **SKIP (Non-Critical Driver Functions)**\n    *   **Identification**: Functions performing optional operations that can be safely ignored (e.g., minor configuration, debug output).\n    *   **Strategy (Note)**: Would be replaced with an empty implementation or a success return.\n\n7.  **NEEDCHECK (Mixed-Functionality Functions)**\n    *   **Identification**: Functions mixing hardware operations with significant upper-layer logic (state machines, data structure management, protocol handling).\n    *   **Strategy (Note)**: Would require removing hardware operations while meticulously preserving all non-driver logic. **Flag for manual review**.\n\n8.  **NODRIVER (Non-Driver Functions)**\n    *   **Identification**: Functions incorrectly flagged as driver-dependent but containing no hardware-specific operations.\n    *   **Strategy (Note)**: Should be left unchanged.\n\n---\n\n### **General Replacement Rules**\n1.  **Return Type**: Do not change the function's return type.\n2.  **No New Declarations**: Do not add `extern` declarations; assume global variables/definitions exist.\n3.  **No New Headers**: Do not add `#include` directives.\n4.  **Preserve OS Operations**: Do not modify any OS-related calls (scheduling, semaphores, queues, interrupt notifications).\n5.  **Preserve Preprocessor Directives**: Keep `#ifdef`, `#if`, etc., unchanged. Do not add new ones.\n6.  **Use Only Provided Helpers**: Only use the helper functions listed below. Do not introduce standard library I/O functions (e.g., `fflush`, `read`, `write`).\n\n**Provided Helper Functions**:\n```c\nint HAL_BE_return_0(); // Returns 0 (typically success)\nint HAL_BE_return_1(); // Returns 1\nint HAL_BE_Out(int len); // Simulates data transmission (can be skipped)\nint HAL_BE_In(void* buf, int len); // Simulates fixed-length data reception\nint HAL_BE_ENET_ReadFrame(void* buf, int length); // Simulates variable-length packet reception\nint HAL_BE_Block_Write(void* buf, int block_size, int block_num); // Simulates block write to storage\nint HAL_BE_Block_Read(void* buf, int block_size, int block_num); // Simulates block read from storage\n```\n\n---\n\n### **Execution Instructions**\nWhen I provide a C function, respond **strictly** as follows:\n1.  **Analysis**: Briefly describe the function's purpose, key operations (MMIO, I/O, OS calls), and control flow.\n2.  **Classification**: State the function's category (**RECV, IRQ, INIT, LOOP, RETURNOK, SKIP, NEEDCHECK, NODRIVER**) and justify the choice.\n3.  **Action**:\n    *   If the function is **RECV, IRQ, INIT, or LOOP**: Provide the **complete rewritten C code** according to the strategy.\n    *   If the function is **RETURNOK, SKIP, NEEDCHECK, or NODRIVER**: State that no code is generated in this phase and explain what the next steps would be.\n4.  **Notes**: Clearly point out any ambiguities, dependencies, or sections that require manual review.\n\n好的，我已经将LOOP类型的示例整合回优化后的prompt中。现在，我将为你补充一个详细的“替换函数生成步骤”说明，这部分可以添加在**Execution Instructions**之前，作为执行具体替换时的详细指南。\n\n---\n\n### **Detailed Function Replacement Generation Steps**\n\nWhen generating replacement code for **RECV, IRQ, INIT, or LOOP** functions, follow these meticulous steps:\n\n1.  **Step 1: Parameter and Return Type Analysis**\n    *   **Examine every function parameter**:\n        *   Identify its **data type** (e.g., `uint32_t`, `UART_Type *`, `void *`, `struct eth_frame *`).\n        *   For **pointer parameters**, determine the **underlying data structure** it points to (if not `void*`). Understand if it is used for input, output, or both.\n    *   **Analyze the return type**:\n        *   Note if it's a standard integer (`int`, `uint8_t`), an error code (`HAL_StatusTypeDef`), a pointer, or `void`.\n        *   Understand the **semantic meaning** of the return value (e.g., bytes read, success/failure, a handle).\n    *   **Special Attention to `void*` parameters**:\n        *   **Trace the usage** of `void*` parameters within the function body to infer the **actual data type** they are cast to or used as (e.g., cast to `uint8_t*` for byte buffer, `struct packet_header*` for network packet).\n        *   The replacement helper function call (`HAL_BE_In`, etc.) must pass the `void*` parameter **as-is** without incorrect type casting unless the original function logic explicitly does so.\n\n2.  **Step 2: Data Structure and Global Variable Mapping**\n    *   Identify all **structs, enums, and macros** used in the function (e.g., `UART_Type`, `ETH_DMARxDesc_TypeDef`).\n    *   Do not redefine them. Assume their definitions are available globally.\n    *   Note any **global variables** or **peripheral instance pointers** (like `UART0`, `&huart1`) accessed by the function. Their declarations are assumed to exist.\n\n3.  **Step 3: MMIO and Hardware Operation Identification**\n    *   Locate all **register accesses** (e.g., `base->DR = data`, `status = reg->SR`).\n    *   Identify **polling loops** waiting for status flags (`while ((reg->ISR & FLAG) == 0)`).\n    *   Identify **data read/write operations** from/to peripheral data registers or FIFOs (`data = base->RDR`, `base->TDR = *pData++`).\n    *   Identify **interrupt control operations** (enable/disable/clear).\n\n4.  **Step 4: Non-Driver Logic Preservation**\n    *   **Isolate and preserve**:\n        *   **Buffer management logic**: Pointer increments, buffer index updates, length checks.\n        *   **State machine updates**: Changing state variables (`huart->RxState = HAL_UART_STATE_READY`).\n        *   **OS/RTOS interactions**: Calls to `xQueueSendFromISR()`, `xSemaphoreGive()`, `vTaskNotifyGive()`.\n        *   **Error checking and logging**: Conditional checks on data validity, error counter increments (if not tied to hardware status).\n        *   **Callback functions**: Invocations of user-provided callback pointers (`htim->PeriodElapsedCallback()`).\n\n5.  **Step 5: Apply Replacement Strategy & Generate Code**\n    *   **RECV**:\n        *   For **reads**: Replace the hardware read sequence with a call to `HAL_BE_In(buf, len)` or `HAL_BE_ENET_ReadFrame(buf, max_len)`. Ensure the `len` argument matches the original intended read size.\n        *   For **writes**: Replace with `printf` or `HAL_BE_Out(len)`, or if safe, skip. **Crucially, preserve any post-transmission logic** (e.g., updating a `txComplete` flag).\n    *   **IRQ**:\n        *   Remove lines that write to interrupt enable/clear registers.\n        *   Keep the **condition checks** that would typically read interrupt flags, but **replace the MMIO read with a non-zero value or variable** to ensure desired branch execution (especially the branch that handles received data).\n        *   Keep all OS calls and state updates inside those branches.\n    *   **INIT**:\n        *   Remove all register writes (`base->CR1 = VALUE`).\n        *   Keep structure member initialization (`handle->Mode = UART_MODE_TX_RX`).\n        *   Keep memory allocation (`handle->pRxBuffPtr = malloc(SIZE)`).\n        *   Set initialization status variables to their \"ready\" state (`handle->State = HAL_UART_STATE_READY`).\n    *   **LOOP**:\n        *   For **polling/wait loops**: Comment out or remove the entire `while` loop. Add a comment: `/* [LOOP REMOVED] Waited for hardware flag. */`\n        *   For **data drain loops** (reading until a FIFO is empty): Replace with a single call to a helper if needed for state consistency, or remove if only clearing flags.\n\n6.  **Step 6: Final Validation (Mental Check)**\n    *   **Return Value**: Ensure the function returns a value consistent with its original successful execution (e.g., `return HAL_OK;`, `return 0;`, `return numberOfBytesRead;`). Use `HAL_BE_return_0()` or `HAL_BE_return_1()` if appropriate.\n    *   **Control Flow**: Verify that no critical `if` or `switch` branch has become unreachable due to removed hardware conditions. Adjust temporary variables if needed to guide flow.\n    *   **Data Consistency**: Ensure that any output parameters (pointer arguments) are written with plausible data, as the helper functions are expected to simulate this.\n    *   **Compilation Safety**: The generated code must be valid C syntax using only existing types and the allowed helper functions.\n",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "system",
+      "name": null,
+      "id": "3b9c77d7-a25e-4593-89eb-4db8e6815de6"
+    },
+    {
+      "content": "Classify the function : HAL_ETH_ReadData",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "667e1580-bc76-4d97-8501-4596d811a525"
+    },
+    {
+      "content": "I'll help you classify the function `HAL_ETH_ReadData`. First, let me gather information about this function from the database.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 79,
+          "prompt_tokens": 3726,
+          "total_tokens": 3805,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3712
+          },
+          "prompt_cache_hit_tokens": 3712,
+          "prompt_cache_miss_tokens": 14
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "45b47d35-ecdc-4498-a17d-83ccb8364d0f",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35ba-7cbb-7900-bdb6-f15a0c0fad0f-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "HAL_ETH_ReadData"
+          },
+          "id": "call_00_IrH4wltG59gwlgTzl3zksAK2",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3726,
+        "output_tokens": 79,
+        "total_tokens": 3805,
+        "input_token_details": {
+          "cache_read": 3712
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', location_line=1083, function_content='/**\\n* @brief  Read a received packet.\\n* @param  heth: pointer to a ETH_HandleTypeDef structure that contains\\n*         the configuration information for ETHERNET module\\n* @param  pAppBuff: Pointer to an application buffer to receive the packet.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_ETH_ReadData(ETH_HandleTypeDef *heth, void **pAppBuff)\\n{\\n  uint32_t descidx;\\n  ETH_DMADescTypeDef *dmarxdesc;\\n  uint32_t desccnt = 0U;\\n  uint32_t desccntmax;\\n  uint32_t bufflength;\\n  uint8_t rxdataready = 0U;\\n\\n  if (pAppBuff == NULL)\\n  {\\n    heth->ErrorCode |= HAL_ETH_ERROR_PARAM;\\n    return HAL_ERROR;\\n  }\\n\\n  if (heth->gState != HAL_ETH_STATE_STARTED)\\n  {\\n    return HAL_ERROR;\\n  }\\n\\n  descidx = heth->RxDescList.RxDescIdx;\\n  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\\n  desccntmax = ETH_RX_DESC_CNT - heth->RxDescList.RxBuildDescCnt;\\n\\n  /* Check if descriptor is not owned by DMA */\\n  while ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN) == (uint32_t)RESET) && (desccnt < desccntmax)\\n         && (rxdataready == 0U))\\n  {\\n    if (READ_BIT(dmarxdesc->DESC0,  ETH_DMARXDESC_LS)  != (uint32_t)RESET)\\n    {\\n      /* Get timestamp high */\\n      heth->RxDescList.TimeStamp.TimeStampHigh = dmarxdesc->DESC7;\\n      /* Get timestamp low */\\n      heth->RxDescList.TimeStamp.TimeStampLow  = dmarxdesc->DESC6;\\n    }\\n    if ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET) || (heth->RxDescList.pRxStart != NULL))\\n    {\\n      /* Check first descriptor */\\n      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET)\\n      {\\n        heth->RxDescList.RxDescCnt = 0;\\n        heth->RxDescList.RxDataLength = 0;\\n      }\\n\\n      /* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */\\n      bufflength = ((dmarxdesc->DESC0 & ETH_DMARXDESC_FL) >> ETH_DMARXDESC_FRAMELENGTHSHIFT);\\n\\n      /* Check if last descriptor */\\n      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_LS) != (uint32_t)RESET)\\n      {\\n        /* Save Last descriptor index */\\n        heth->RxDescList.pRxLastRxDesc = dmarxdesc->DESC0;\\n\\n        /* Packet ready */\\n        rxdataready = 1;\\n      }\\n\\n      /* Link data */\\n      WRITE_REG(dmarxdesc->BackupAddr0, dmarxdesc->DESC2);\\n#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)\\n      /*Call registered Link callback*/\\n      heth->rxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\\n                           (uint8_t *)dmarxdesc->BackupAddr0, bufflength);\\n#else\\n      /* Link callback */\\n      HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\\n                             (uint8_t *)dmarxdesc->BackupAddr0, (uint16_t) bufflength);\\n#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */\\n      heth->RxDescList.RxDescCnt++;\\n      heth->RxDescList.RxDataLength += bufflength;\\n\\n      /* Clear buffer pointer */\\n      dmarxdesc->BackupAddr0 = 0;\\n    }\\n\\n    /* Increment current rx descriptor index */\\n    INCR_RX_DESC_INDEX(descidx, 1U);\\n    /* Get current descriptor address */\\n    dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\\n    desccnt++;\\n  }\\n\\n  heth->RxDescList.RxBuildDescCnt += desccnt;\\n  if ((heth->RxDescList.RxBuildDescCnt) != 0U)\\n  {\\n    /* Update Descriptors */\\n    ETH_UpdateDescriptor(heth);\\n  }\\n\\n  heth->RxDescList.RxDescIdx = descidx;\\n\\n  if (rxdataready == 1U)\\n  {\\n    /* Return received packet */\\n    *pAppBuff = heth->RxDescList.pRxStart;\\n    /* Reset first element */\\n    heth->RxDescList.pRxStart = NULL;\\n\\n    return HAL_OK;\\n  }\\n\\n  /* Packet not ready */\\n  return HAL_ERROR;\\n}\\n', function_content_in_lines={'1083': 'HAL_StatusTypeDef HAL_ETH_ReadData(ETH_HandleTypeDef *heth, void **pAppBuff)', '1084': '{', '1085': '  uint32_t descidx;', '1086': '  ETH_DMADescTypeDef *dmarxdesc;', '1087': '  uint32_t desccnt = 0U;', '1088': '  uint32_t desccntmax;', '1089': '  uint32_t bufflength;', '1090': '  uint8_t rxdataready = 0U;', '1091': '', '1092': '  if (pAppBuff == NULL)', '1093': '  {', '1094': '    heth->ErrorCode |= HAL_ETH_ERROR_PARAM;', '1095': '    return HAL_ERROR;', '1096': '  }', '1097': '', '1098': '  if (heth->gState != HAL_ETH_STATE_STARTED)', '1099': '  {', '1100': '    return HAL_ERROR;', '1101': '  }', '1102': '', '1103': '  descidx = heth->RxDescList.RxDescIdx;', '1104': '  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];', '1105': '  desccntmax = ETH_RX_DESC_CNT - heth->RxDescList.RxBuildDescCnt;', '1106': '', '1107': '  /* Check if descriptor is not owned by DMA */', '1108': '  while ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN) == (uint32_t)RESET) && (desccnt < desccntmax)', '1109': '         && (rxdataready == 0U))', '1110': '  {', '1111': '    if (READ_BIT(dmarxdesc->DESC0,  ETH_DMARXDESC_LS)  != (uint32_t)RESET)', '1112': '    {', '1113': '      /* Get timestamp high */', '1114': '      heth->RxDescList.TimeStamp.TimeStampHigh = dmarxdesc->DESC7;', '1115': '      /* Get timestamp low */', '1116': '      heth->RxDescList.TimeStamp.TimeStampLow  = dmarxdesc->DESC6;', '1117': '    }', '1118': '    if ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET) || (heth->RxDescList.pRxStart != NULL))', '1119': '    {', '1120': '      /* Check first descriptor */', '1121': '      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET)', '1122': '      {', '1123': '        heth->RxDescList.RxDescCnt = 0;', '1124': '        heth->RxDescList.RxDataLength = 0;', '1125': '      }', '1126': '', '1127': '      /* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */', '1128': '      bufflength = ((dmarxdesc->DESC0 & ETH_DMARXDESC_FL) >> ETH_DMARXDESC_FRAMELENGTHSHIFT);', '1129': '', '1130': '      /* Check if last descriptor */', '1131': '      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_LS) != (uint32_t)RESET)', '1132': '      {', '1133': '        /* Save Last descriptor index */', '1134': '        heth->RxDescList.pRxLastRxDesc = dmarxdesc->DESC0;', '1135': '', '1136': '        /* Packet ready */', '1137': '        rxdataready = 1;', '1138': '      }', '1139': '', '1140': '      /* Link data */', '1141': '      WRITE_REG(dmarxdesc->BackupAddr0, dmarxdesc->DESC2);', '1142': '#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)', '1143': '      /*Call registered Link callback*/', '1144': '      heth->rxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,', '1145': '                           (uint8_t *)dmarxdesc->BackupAddr0, bufflength);', '1146': '#else', '1147': '      /* Link callback */', '1148': '      HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,', '1149': '                             (uint8_t *)dmarxdesc->BackupAddr0, (uint16_t) bufflength);', '1150': '#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */', '1151': '      heth->RxDescList.RxDescCnt++;', '1152': '      heth->RxDescList.RxDataLength += bufflength;', '1153': '', '1154': '      /* Clear buffer pointer */', '1155': '      dmarxdesc->BackupAddr0 = 0;', '1156': '    }', '1157': '', '1158': '    /* Increment current rx descriptor index */', '1159': '    INCR_RX_DESC_INDEX(descidx, 1U);', '1160': '    /* Get current descriptor address */', '1161': '    dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];', '1162': '    desccnt++;', '1163': '  }', '1164': '', '1165': '  heth->RxDescList.RxBuildDescCnt += desccnt;', '1166': '  if ((heth->RxDescList.RxBuildDescCnt) != 0U)', '1167': '  {', '1168': '    /* Update Descriptors */', '1169': '    ETH_UpdateDescriptor(heth);', '1170': '  }', '1171': '', '1172': '  heth->RxDescList.RxDescIdx = descidx;', '1173': '', '1174': '  if (rxdataready == 1U)', '1175': '  {', '1176': '    /* Return received packet */', '1177': '    *pAppBuff = heth->RxDescList.pRxStart;', '1178': '    /* Reset first element */', '1179': '    heth->RxDescList.pRxStart = NULL;', '1180': '', '1181': '    return HAL_OK;', '1182': '  }', '1183': '', '1184': '  /* Packet not ready */', '1185': '  return HAL_ERROR;', '1186': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "301e2a07-c153-4968-a633-2a6993827a5b",
+      "tool_call_id": "call_00_IrH4wltG59gwlgTzl3zksAK2",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me also check if this function is in the MMIO function list to understand its hardware dependencies:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 74,
+          "prompt_tokens": 6878,
+          "total_tokens": 6952,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3776
+          },
+          "prompt_cache_hit_tokens": 3776,
+          "prompt_cache_miss_tokens": 3102
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "82adad38-4f02-4984-b924-8a0da32b1630",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35ba-9b1d-7ef1-a240-a92a4621ea95-0",
+      "tool_calls": [
+        {
+          "name": "collect_mmio_func_info",
+          "args": {
+            "func_name": "HAL_ETH_ReadData"
+          },
+          "id": "call_00_pGnELp9TnW3qR50SHg8snEFA",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 6878,
+        "output_tokens": 74,
+        "total_tokens": 6952,
+        "input_token_details": {
+          "cache_read": 3776
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "MMIO Exprs info: [MmioExprInfo(name='pRxEnd', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1148, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pRxStart', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1118, expr_type='varaccess', enclosing_type='binary'), MmioExprInfo(name='pRxStart', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1148, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='pRxStart', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1177, expr_type='varaccess', enclosing_type='assign_to'), MmioExprInfo(name='pRxStart', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1179, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='pRxLastRxDesc', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1134, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='RxDataLength', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1152, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='TimeStampHigh', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1114, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='TimeStampLow', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1116, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='BackupAddr0', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1141, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='BackupAddr0', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1149, expr_type='varaccess', enclosing_type='call'), MmioExprInfo(name='bufflength', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1128, expr_type='varaccess', enclosing_type='assign_from'), MmioExprInfo(name='bufflength', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1149, expr_type='varaccess', enclosing_type='call'), MmioExprInfo(name='bufflength', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1152, expr_type='varaccess', enclosing_type='skip'), MmioExprInfo(name='& ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1148, expr_type='unary', enclosing_type='call'), MmioExprInfo(name='... += ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1152, expr_type='assign', enclosing_type='stmt'), MmioExprInfo(name='... & ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1108, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... & ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1111, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1118, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1121, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1128, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... & ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1131, expr_type='binary', enclosing_type='skip'), MmioExprInfo(name='... != ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1111, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1118, expr_type='binary', enclosing_type='binary'), MmioExprInfo(name='... != ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1121, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... != ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1131, expr_type='binary', enclosing_type='control_flow'), MmioExprInfo(name='... >> ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1128, expr_type='binary', enclosing_type='assign_to'), MmioExprInfo(name='... = ...', function='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1141, expr_type='assign', enclosing_type='stmt')]\nFunction info: FunctionInfo(name='HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', location_line=1083, function_content='/**\\n* @brief  Read a received packet.\\n* @param  heth: pointer to a ETH_HandleTypeDef structure that contains\\n*         the configuration information for ETHERNET module\\n* @param  pAppBuff: Pointer to an application buffer to receive the packet.\\n* @retval HAL status\\n*/\\nHAL_StatusTypeDef HAL_ETH_ReadData(ETH_HandleTypeDef *heth, void **pAppBuff)\\n{\\n  uint32_t descidx;\\n  ETH_DMADescTypeDef *dmarxdesc;\\n  uint32_t desccnt = 0U;\\n  uint32_t desccntmax;\\n  uint32_t bufflength;\\n  uint8_t rxdataready = 0U;\\n\\n  if (pAppBuff == NULL)\\n  {\\n    heth->ErrorCode |= HAL_ETH_ERROR_PARAM;\\n    return HAL_ERROR;\\n  }\\n\\n  if (heth->gState != HAL_ETH_STATE_STARTED)\\n  {\\n    return HAL_ERROR;\\n  }\\n\\n  descidx = heth->RxDescList.RxDescIdx;\\n  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\\n  desccntmax = ETH_RX_DESC_CNT - heth->RxDescList.RxBuildDescCnt;\\n\\n  /* Check if descriptor is not owned by DMA */\\n  while ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN) == (uint32_t)RESET) && (desccnt < desccntmax)\\n         && (rxdataready == 0U))\\n  {\\n    if (READ_BIT(dmarxdesc->DESC0,  ETH_DMARXDESC_LS)  != (uint32_t)RESET)\\n    {\\n      /* Get timestamp high */\\n      heth->RxDescList.TimeStamp.TimeStampHigh = dmarxdesc->DESC7;\\n      /* Get timestamp low */\\n      heth->RxDescList.TimeStamp.TimeStampLow  = dmarxdesc->DESC6;\\n    }\\n    if ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET) || (heth->RxDescList.pRxStart != NULL))\\n    {\\n      /* Check first descriptor */\\n      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET)\\n      {\\n        heth->RxDescList.RxDescCnt = 0;\\n        heth->RxDescList.RxDataLength = 0;\\n      }\\n\\n      /* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */\\n      bufflength = ((dmarxdesc->DESC0 & ETH_DMARXDESC_FL) >> ETH_DMARXDESC_FRAMELENGTHSHIFT);\\n\\n      /* Check if last descriptor */\\n      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_LS) != (uint32_t)RESET)\\n      {\\n        /* Save Last descriptor index */\\n        heth->RxDescList.pRxLastRxDesc = dmarxdesc->DESC0;\\n\\n        /* Packet ready */\\n        rxdataready = 1;\\n      }\\n\\n      /* Link data */\\n      WRITE_REG(dmarxdesc->BackupAddr0, dmarxdesc->DESC2);\\n#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)\\n      /*Call registered Link callback*/\\n      heth->rxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\\n                           (uint8_t *)dmarxdesc->BackupAddr0, bufflength);\\n#else\\n      /* Link callback */\\n      HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\\n                             (uint8_t *)dmarxdesc->BackupAddr0, (uint16_t) bufflength);\\n#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */\\n      heth->RxDescList.RxDescCnt++;\\n      heth->RxDescList.RxDataLength += bufflength;\\n\\n      /* Clear buffer pointer */\\n      dmarxdesc->BackupAddr0 = 0;\\n    }\\n\\n    /* Increment current rx descriptor index */\\n    INCR_RX_DESC_INDEX(descidx, 1U);\\n    /* Get current descriptor address */\\n    dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\\n    desccnt++;\\n  }\\n\\n  heth->RxDescList.RxBuildDescCnt += desccnt;\\n  if ((heth->RxDescList.RxBuildDescCnt) != 0U)\\n  {\\n    /* Update Descriptors */\\n    ETH_UpdateDescriptor(heth);\\n  }\\n\\n  heth->RxDescList.RxDescIdx = descidx;\\n\\n  if (rxdataready == 1U)\\n  {\\n    /* Return received packet */\\n    *pAppBuff = heth->RxDescList.pRxStart;\\n    /* Reset first element */\\n    heth->RxDescList.pRxStart = NULL;\\n\\n    return HAL_OK;\\n  }\\n\\n  /* Packet not ready */\\n  return HAL_ERROR;\\n}\\n', function_content_in_lines={'1083': 'HAL_StatusTypeDef HAL_ETH_ReadData(ETH_HandleTypeDef *heth, void **pAppBuff)', '1084': '{', '1085': '  uint32_t descidx;', '1086': '  ETH_DMADescTypeDef *dmarxdesc;', '1087': '  uint32_t desccnt = 0U;', '1088': '  uint32_t desccntmax;', '1089': '  uint32_t bufflength;', '1090': '  uint8_t rxdataready = 0U;', '1091': '', '1092': '  if (pAppBuff == NULL)', '1093': '  {', '1094': '    heth->ErrorCode |= HAL_ETH_ERROR_PARAM;', '1095': '    return HAL_ERROR;', '1096': '  }', '1097': '', '1098': '  if (heth->gState != HAL_ETH_STATE_STARTED)', '1099': '  {', '1100': '    return HAL_ERROR;', '1101': '  }', '1102': '', '1103': '  descidx = heth->RxDescList.RxDescIdx;', '1104': '  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];', '1105': '  desccntmax = ETH_RX_DESC_CNT - heth->RxDescList.RxBuildDescCnt;', '1106': '', '1107': '  /* Check if descriptor is not owned by DMA */', '1108': '  while ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN) == (uint32_t)RESET) && (desccnt < desccntmax)', '1109': '         && (rxdataready == 0U))', '1110': '  {', '1111': '    if (READ_BIT(dmarxdesc->DESC0,  ETH_DMARXDESC_LS)  != (uint32_t)RESET)', '1112': '    {', '1113': '      /* Get timestamp high */', '1114': '      heth->RxDescList.TimeStamp.TimeStampHigh = dmarxdesc->DESC7;', '1115': '      /* Get timestamp low */', '1116': '      heth->RxDescList.TimeStamp.TimeStampLow  = dmarxdesc->DESC6;', '1117': '    }', '1118': '    if ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET) || (heth->RxDescList.pRxStart != NULL))', '1119': '    {', '1120': '      /* Check first descriptor */', '1121': '      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_FS) != (uint32_t)RESET)', '1122': '      {', '1123': '        heth->RxDescList.RxDescCnt = 0;', '1124': '        heth->RxDescList.RxDataLength = 0;', '1125': '      }', '1126': '', '1127': '      /* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */', '1128': '      bufflength = ((dmarxdesc->DESC0 & ETH_DMARXDESC_FL) >> ETH_DMARXDESC_FRAMELENGTHSHIFT);', '1129': '', '1130': '      /* Check if last descriptor */', '1131': '      if (READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_LS) != (uint32_t)RESET)', '1132': '      {', '1133': '        /* Save Last descriptor index */', '1134': '        heth->RxDescList.pRxLastRxDesc = dmarxdesc->DESC0;', '1135': '', '1136': '        /* Packet ready */', '1137': '        rxdataready = 1;', '1138': '      }', '1139': '', '1140': '      /* Link data */', '1141': '      WRITE_REG(dmarxdesc->BackupAddr0, dmarxdesc->DESC2);', '1142': '#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)', '1143': '      /*Call registered Link callback*/', '1144': '      heth->rxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,', '1145': '                           (uint8_t *)dmarxdesc->BackupAddr0, bufflength);', '1146': '#else', '1147': '      /* Link callback */', '1148': '      HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,', '1149': '                             (uint8_t *)dmarxdesc->BackupAddr0, (uint16_t) bufflength);', '1150': '#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */', '1151': '      heth->RxDescList.RxDescCnt++;', '1152': '      heth->RxDescList.RxDataLength += bufflength;', '1153': '', '1154': '      /* Clear buffer pointer */', '1155': '      dmarxdesc->BackupAddr0 = 0;', '1156': '    }', '1157': '', '1158': '    /* Increment current rx descriptor index */', '1159': '    INCR_RX_DESC_INDEX(descidx, 1U);', '1160': '    /* Get current descriptor address */', '1161': '    dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];', '1162': '    desccnt++;', '1163': '  }', '1164': '', '1165': '  heth->RxDescList.RxBuildDescCnt += desccnt;', '1166': '  if ((heth->RxDescList.RxBuildDescCnt) != 0U)', '1167': '  {', '1168': '    /* Update Descriptors */', '1169': '    ETH_UpdateDescriptor(heth);', '1170': '  }', '1171': '', '1172': '  heth->RxDescList.RxDescIdx = descidx;', '1173': '', '1174': '  if (rxdataready == 1U)', '1175': '  {', '1176': '    /* Return received packet */', '1177': '    *pAppBuff = heth->RxDescList.pRxStart;', '1178': '    /* Reset first element */', '1179': '    heth->RxDescList.pRxStart = NULL;', '1180': '', '1181': '    return HAL_OK;', '1182': '  }', '1183': '', '1184': '  /* Packet not ready */', '1185': '  return HAL_ERROR;', '1186': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_mmio_func_info",
+      "id": "3a620e8a-c4b6-4c14-a433-5cd24c223d84",
+      "tool_call_id": "call_00_pGnELp9TnW3qR50SHg8snEFA",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Let me also check the call stack to understand how this function is used:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 66,
+          "prompt_tokens": 12386,
+          "total_tokens": 12452,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 6912
+          },
+          "prompt_cache_hit_tokens": 6912,
+          "prompt_cache_miss_tokens": 5474
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "f200313d-7147-44f5-b798-d6b85d7a62a0",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35ba-b663-7ab1-9011-dc05d30040e7-0",
+      "tool_calls": [
+        {
+          "name": "collect_func_call_stack",
+          "args": {
+            "func_name": "HAL_ETH_ReadData"
+          },
+          "id": "call_00_7iatVFz8eZUPj4piKf4KOLkm",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12386,
+        "output_tokens": 66,
+        "total_tokens": 12452,
+        "input_token_details": {
+          "cache_read": 6912
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function call to info: [FunctionCallInfo(caller_name='HAL_ETH_ReadData', callee_name='HAL_ETH_RxLinkCallback', call_tag='call to HAL_ETH_RxLinkCallback', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1148, call_type='direct', ret_type='noReturnValue', start_line_content='      HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,'), FunctionCallInfo(caller_name='HAL_ETH_ReadData', callee_name='ETH_UpdateDescriptor', call_tag='call to ETH_UpdateDescriptor', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', start_line=1169, call_type='direct', ret_type='noReturnValue', start_line_content='    ETH_UpdateDescriptor(heth);')]\nFunction call from info: [FunctionCallInfo(caller_name='low_level_input', callee_name='HAL_ETH_ReadData', call_tag='call to HAL_ETH_ReadData', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Src/ethernetif.c', start_line=329, call_type='direct', ret_type='noReturnValue', start_line_content='    HAL_ETH_ReadData(&EthHandle, (void **)&p);')]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_func_call_stack",
+      "id": "149e5606-29e1-4890-8e87-73461ca53402",
+      "tool_call_id": "call_00_7iatVFz8eZUPj4piKf4KOLkm",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the ETH_UpdateDescriptor function to understand what hardware operations it performs:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 65,
+          "prompt_tokens": 12840,
+          "total_tokens": 12905,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 12416
+          },
+          "prompt_cache_hit_tokens": 12416,
+          "prompt_cache_miss_tokens": 424
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "b6aabc63-e7dc-42bb-a23c-b8e96f859b1c",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35ba-cf85-79c1-b574-f85d2f330dc6-0",
+      "tool_calls": [
+        {
+          "name": "collect_function_info",
+          "args": {
+            "func_name": "ETH_UpdateDescriptor"
+          },
+          "id": "call_00_6ReOjZCKNw9r4LpN4jMZwq1k",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 12840,
+        "output_tokens": 65,
+        "total_tokens": 12905,
+        "input_token_details": {
+          "cache_read": 12416
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Function info: FunctionInfo(name='ETH_UpdateDescriptor', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c', location_line=1196, function_content=\"/**\\n* @brief  This function gives back Rx Desc of the last received Packet\\n*         to the DMA, so ETH DMA will be able to use these descriptors\\n*         to receive next Packets.\\n* @param  heth: pointer to a ETH_HandleTypeDef structure that contains\\n*         the configuration information for ETHERNET module\\n* @retval HAL status\\n*/\\nstatic void ETH_UpdateDescriptor(ETH_HandleTypeDef *heth)\\n{\\n  uint32_t descidx;\\n  uint32_t tailidx;\\n  uint32_t desccount;\\n  ETH_DMADescTypeDef *dmarxdesc;\\n  uint8_t *buff = NULL;\\n  uint8_t allocStatus = 1U;\\n\\n  descidx = heth->RxDescList.RxBuildDescIdx;\\n  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\\n  desccount = heth->RxDescList.RxBuildDescCnt;\\n\\n  while ((desccount > 0U) && (allocStatus != 0U))\\n  {\\n    /* Check if a buffer's attached the descriptor */\\n    if (READ_REG(dmarxdesc->BackupAddr0) == 0U)\\n    {\\n      /* Get a new buffer. */\\n#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)\\n      /*Call registered Allocate callback*/\\n      heth->rxAllocateCallback(&buff);\\n#else\\n      /* Allocate callback */\\n      HAL_ETH_RxAllocateCallback(&buff);\\n#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */\\n      if (buff == NULL)\\n      {\\n        allocStatus = 0U;\\n      }\\n      else\\n      {\\n        WRITE_REG(dmarxdesc->BackupAddr0, (uint32_t)buff);\\n        WRITE_REG(dmarxdesc->DESC2, (uint32_t)buff);\\n      }\\n    }\\n\\n    if (allocStatus != 0U)\\n    {\\n      if (heth->RxDescList.ItMode == 0U)\\n      {\\n        WRITE_REG(dmarxdesc->DESC1, heth->Init.RxBuffLen | ETH_DMARXDESC_DIC | ETH_DMARXDESC_RCH);\\n      }\\n      else\\n      {\\n        WRITE_REG(dmarxdesc->DESC1, heth->Init.RxBuffLen | ETH_DMARXDESC_RCH);\\n      }\\n\\n      SET_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN);\\n\\n      /* Increment current rx descriptor index */\\n      INCR_RX_DESC_INDEX(descidx, 1U);\\n      /* Get current descriptor address */\\n      dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\\n      desccount--;\\n    }\\n  }\\n\\n  if (heth->RxDescList.RxBuildDescCnt != desccount)\\n  {\\n    /* Set the tail pointer index */\\n    tailidx = (descidx + 1U) % ETH_RX_DESC_CNT;\\n\\n    /* DMB instruction to avoid race condition */\\n    __DMB();\\n\\n    /* Set the Tail pointer address */\\n    WRITE_REG(heth->Instance->DMARPDR, ((uint32_t)(heth->Init.RxDesc + (tailidx))));\\n\\n    heth->RxDescList.RxBuildDescIdx = descidx;\\n    heth->RxDescList.RxBuildDescCnt = desccount;\\n  }\\n}\\n\", function_content_in_lines={'1196': 'static void ETH_UpdateDescriptor(ETH_HandleTypeDef *heth)', '1197': '{', '1198': '  uint32_t descidx;', '1199': '  uint32_t tailidx;', '1200': '  uint32_t desccount;', '1201': '  ETH_DMADescTypeDef *dmarxdesc;', '1202': '  uint8_t *buff = NULL;', '1203': '  uint8_t allocStatus = 1U;', '1204': '', '1205': '  descidx = heth->RxDescList.RxBuildDescIdx;', '1206': '  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];', '1207': '  desccount = heth->RxDescList.RxBuildDescCnt;', '1208': '', '1209': '  while ((desccount > 0U) && (allocStatus != 0U))', '1210': '  {', '1211': \"    /* Check if a buffer's attached the descriptor */\", '1212': '    if (READ_REG(dmarxdesc->BackupAddr0) == 0U)', '1213': '    {', '1214': '      /* Get a new buffer. */', '1215': '#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)', '1216': '      /*Call registered Allocate callback*/', '1217': '      heth->rxAllocateCallback(&buff);', '1218': '#else', '1219': '      /* Allocate callback */', '1220': '      HAL_ETH_RxAllocateCallback(&buff);', '1221': '#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */', '1222': '      if (buff == NULL)', '1223': '      {', '1224': '        allocStatus = 0U;', '1225': '      }', '1226': '      else', '1227': '      {', '1228': '        WRITE_REG(dmarxdesc->BackupAddr0, (uint32_t)buff);', '1229': '        WRITE_REG(dmarxdesc->DESC2, (uint32_t)buff);', '1230': '      }', '1231': '    }', '1232': '', '1233': '    if (allocStatus != 0U)', '1234': '    {', '1235': '      if (heth->RxDescList.ItMode == 0U)', '1236': '      {', '1237': '        WRITE_REG(dmarxdesc->DESC1, heth->Init.RxBuffLen | ETH_DMARXDESC_DIC | ETH_DMARXDESC_RCH);', '1238': '      }', '1239': '      else', '1240': '      {', '1241': '        WRITE_REG(dmarxdesc->DESC1, heth->Init.RxBuffLen | ETH_DMARXDESC_RCH);', '1242': '      }', '1243': '', '1244': '      SET_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN);', '1245': '', '1246': '      /* Increment current rx descriptor index */', '1247': '      INCR_RX_DESC_INDEX(descidx, 1U);', '1248': '      /* Get current descriptor address */', '1249': '      dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];', '1250': '      desccount--;', '1251': '    }', '1252': '  }', '1253': '', '1254': '  if (heth->RxDescList.RxBuildDescCnt != desccount)', '1255': '  {', '1256': '    /* Set the tail pointer index */', '1257': '    tailidx = (descidx + 1U) % ETH_RX_DESC_CNT;', '1258': '', '1259': '    /* DMB instruction to avoid race condition */', '1260': '    __DMB();', '1261': '', '1262': '    /* Set the Tail pointer address */', '1263': '    WRITE_REG(heth->Instance->DMARPDR, ((uint32_t)(heth->Init.RxDesc + (tailidx))));', '1264': '', '1265': '    heth->RxDescList.RxBuildDescIdx = descidx;', '1266': '    heth->RxDescList.RxBuildDescCnt = desccount;', '1267': '  }', '1268': '}'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_function_info",
+      "id": "c5685b96-fbc3-4d2e-af9f-fbd7acf4aba7",
+      "tool_call_id": "call_00_6ReOjZCKNw9r4LpN4jMZwq1k",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Now let me check the ETH_DMADescTypeDef structure to understand the descriptor fields:",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 72,
+          "prompt_tokens": 14955,
+          "total_tokens": 15027,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 12864
+          },
+          "prompt_cache_hit_tokens": 12864,
+          "prompt_cache_miss_tokens": 2091
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "b6cba7aa-82f8-43bb-9fc3-94e746aeaa9b",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35ba-e805-7162-97f6-13f7b1a018ca-0",
+      "tool_calls": [
+        {
+          "name": "collect_struct_or_enum_info",
+          "args": {
+            "struct_name": "ETH_DMADescTypeDef"
+          },
+          "id": "call_00_4gscIPJaU5WNQCKWyioQO6ct",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 14955,
+        "output_tokens": 72,
+        "total_tokens": 15027,
+        "input_token_details": {
+          "cache_read": 12864
+        },
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Struct info: StructInfo(name='ETH_DMADescTypeDef', file_path='/home/haojie/posixGen_Demos/LwIP_StreamingServer/Drivers/STM32F7xx_HAL_Driver/Inc/stm32f7xx_hal_eth.h', location_line=59, struct_content='/**\\n* @brief  ETH DMA Descriptor structure definition\\n*/\\n{\\n  __IO uint32_t DESC0;\\n  __IO uint32_t DESC1;\\n  __IO uint32_t DESC2;\\n  __IO uint32_t DESC3;\\n  __IO uint32_t DESC4;\\n  __IO uint32_t DESC5;\\n  __IO uint32_t DESC6;\\n  __IO uint32_t DESC7;\\n  uint32_t BackupAddr0; /* used to store rx buffer 1 address */\\n  uint32_t BackupAddr1; /* used to store rx buffer 2 address */\\n} ETH_DMADescTypeDef;\\n', struct_content_in_lines={'59': '{', '60': '  __IO uint32_t DESC0;', '61': '  __IO uint32_t DESC1;', '62': '  __IO uint32_t DESC2;', '63': '  __IO uint32_t DESC3;', '64': '  __IO uint32_t DESC4;', '65': '  __IO uint32_t DESC5;', '66': '  __IO uint32_t DESC6;', '67': '  __IO uint32_t DESC7;', '68': '  uint32_t BackupAddr0; /* used to store rx buffer 1 address */', '69': '  uint32_t BackupAddr1; /* used to store rx buffer 2 address */', '70': '} ETH_DMADescTypeDef;'}, members={'DESC0': '__useconds_t', 'DESC1': '__ULong', 'DESC2': '__ULong', 'DESC3': '__fd_mask', 'DESC4': 'clock_t', 'DESC5': '__clockid_t', 'DESC6': '__uint32_t', 'DESC7': '__uint32_t', 'BackupAddr0': '__useconds_t', 'BackupAddr1': 'ulong'})",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "collect_struct_or_enum_info",
+      "id": "fd19008a-7d40-47cf-bb7d-aca94ec714d2",
+      "tool_call_id": "call_00_4gscIPJaU5WNQCKWyioQO6ct",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "## Analysis\n\nBased on my analysis of the `HAL_ETH_ReadData` function:\n\n1. **Function Purpose**: This function reads a received Ethernet packet from DMA descriptors and returns it to the application. It's a core data reception function for the Ethernet driver.\n\n2. **Key Operations**:\n   - **Hardware Operations**: \n     - Reads DMA descriptor fields (`DESC0`, `DESC6`, `DESC7`) to check packet status and get metadata\n     - Uses `READ_BIT()` macros to check descriptor flags (OWN, LS, FS)\n     - Calls `WRITE_REG()` to update descriptor fields\n     - Calls `ETH_UpdateDescriptor()` which performs hardware register writes to DMA controller\n   - **Data Processing**: \n     - Processes DMA descriptor chain to reconstruct received packets\n     - Updates descriptor list state variables\n     - Calls callback functions (`HAL_ETH_RxLinkCallback`)\n   - **Buffer Management**: Returns application buffer pointer through `pAppBuff`\n\n3. **Control Flow**:\n   - Has a `while` loop that polls DMA descriptor ownership status (polling loop)\n   - Processes descriptors until a complete packet is found (LS flag set)\n   - Updates internal state and returns packet pointer if ready\n\n4. **Critical Observations**:\n   - The function contains a **polling loop** that waits for DMA descriptors to be available (`while ((READ_BIT(dmarxdesc->DESC0, ETH_DMARXDESC_OWN) == (uint32_t)RESET) && ...)`)\n   - It reads hardware descriptor fields to determine packet boundaries and length\n   - It calls `ETH_UpdateDescriptor()` which performs actual hardware register writes to DMA controller\n   - The function returns a pointer to received data through `pAppBuff`\n\n## Classification\n\n**Classification: RECV (Data Transmission/Reception Functions)**\n\n**Justification**:\n1. **Primary Function**: This is a core data reception function that reads received Ethernet packets from DMA descriptors\n2. **Critical Data I/O**: It processes DMA descriptors to extract received packet data and returns it to the application\n3. **Polling Loop**: Contains a hardware-dependent polling loop waiting for DMA descriptor availability\n4. **Hardware Operations**: Reads and writes DMA descriptor fields, calls hardware update functions\n5. **Upper-layer Impact**: Returns application buffer pointer and updates driver state structures\n\nThis function fits the **RECV** category because:\n- It performs critical data reception operations\n- It has hardware-dependent polling loops (LOOP characteristic)\n- It processes received data and returns it to upper layers\n- It requires replacement of hardware read operations with simulation functions\n\n## Action\n\nSince this is classified as **RECV**, I will generate the complete replacement code according to the specified strategy.\n\n**Replacement Strategy**:\n1. Replace the hardware polling loop with simulated data reception\n2. Preserve all buffer management and state update logic\n3. Replace hardware descriptor reads with simulated data\n4. Keep callback function calls intact\n5. Simulate successful packet reception to maintain normal control flow\n\nHere's the complete rewritten code:\n\n```c\nHAL_StatusTypeDef HAL_ETH_ReadData(ETH_HandleTypeDef *heth, void **pAppBuff)\n{\n  uint32_t descidx;\n  ETH_DMADescTypeDef *dmarxdesc;\n  uint32_t desccnt = 0U;\n  uint32_t desccntmax;\n  uint32_t bufflength;\n  uint8_t rxdataready = 0U;\n\n  if (pAppBuff == NULL)\n  {\n    heth->ErrorCode |= HAL_ETH_ERROR_PARAM;\n    return HAL_ERROR;\n  }\n\n  if (heth->gState != HAL_ETH_STATE_STARTED)\n  {\n    return HAL_ERROR;\n  }\n\n  descidx = heth->RxDescList.RxDescIdx;\n  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\n  desccntmax = ETH_RX_DESC_CNT - heth->RxDescList.RxBuildDescCnt;\n\n  /* [LOOP REMOVED] Original while loop polling DMA descriptor ownership */\n  /* Simulate receiving a packet by setting rxdataready to 1 */\n  rxdataready = 1U;\n  \n  /* Simulate descriptor processing for a complete packet */\n  if (rxdataready == 1U)\n  {\n    /* Simulate getting timestamp */\n    heth->RxDescList.TimeStamp.TimeStampHigh = 0; /* Simulated timestamp */\n    heth->RxDescList.TimeStamp.TimeStampLow = 0;  /* Simulated timestamp */\n    \n    /* Simulate frame length - use a reasonable default */\n    bufflength = 1500; /* Typical Ethernet MTU */\n    \n    /* Simulate first descriptor processing */\n    heth->RxDescList.RxDescCnt = 0;\n    heth->RxDescList.RxDataLength = 0;\n    \n    /* Simulate last descriptor */\n    heth->RxDescList.pRxLastRxDesc = 0; /* Simulated descriptor value */\n    \n    /* Simulate data linking - call callback with simulated data */\n    /* Use HAL_BE_ENET_ReadFrame to simulate receiving packet data */\n    uint8_t simulated_buffer[1500];\n    int received_len = HAL_BE_ENET_ReadFrame(simulated_buffer, sizeof(simulated_buffer));\n    \n    if (received_len > 0)\n    {\n      bufflength = (uint32_t)received_len;\n    }\n    \n    /* Call link callback with simulated data */\n#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)\n    /* Call registered Link callback */\n    heth->rxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\n                         simulated_buffer, bufflength);\n#else\n    /* Link callback */\n    HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\n                           simulated_buffer, (uint16_t)bufflength);\n#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */\n    \n    heth->RxDescList.RxDescCnt++;\n    heth->RxDescList.RxDataLength += bufflength;\n    \n    /* Clear buffer pointer */\n    dmarxdesc->BackupAddr0 = 0;\n    \n    /* Simulate descriptor index updates */\n    desccnt = 1U; /* Simulate processing one descriptor */\n  }\n\n  heth->RxDescList.RxBuildDescCnt += desccnt;\n  if ((heth->RxDescList.RxBuildDescCnt) != 0U)\n  {\n    /* [HARDWARE REMOVED] Skip descriptor update hardware operation */\n    /* ETH_UpdateDescriptor(heth); */\n  }\n\n  heth->RxDescList.RxDescIdx = descidx;\n\n  if (rxdataready == 1U)\n  {\n    /* Return received packet */\n    *pAppBuff = heth->RxDescList.pRxStart;\n    /* Reset first element */\n    heth->RxDescList.pRxStart = NULL;\n\n    return HAL_OK;\n  }\n\n  /* Packet not ready */\n  return HAL_ERROR;\n}\n```\n\n## Notes\n\n1. **Critical Changes Made**:\n   - **Polling Loop Removed**: The hardware-dependent `while` loop waiting for DMA descriptor ownership has been replaced with direct simulation of packet reception\n   - **Hardware Reads Replaced**: Descriptor field reads (`DESC0`, `DESC6`, `DESC7`) replaced with simulated values\n   - **Hardware Write Skipped**: The call to `ETH_UpdateDescriptor()` (which writes to hardware registers) has been commented out\n   - **Data Reception Simulated**: Added call to `HAL_BE_ENET_ReadFrame()` to simulate receiving Ethernet packet data\n\n2. **Preserved Logic**:\n   - All parameter validation and error checking preserved\n   - Buffer management and state updates preserved\n   - Callback function calls preserved (now using simulated data)\n   - Control flow for returning packet to application preserved\n\n3. **Dependencies**:\n   - Assumes `HAL_BE_ENET_ReadFrame()` is available for simulating packet reception\n   - Assumes `ETH_DMADescTypeDef` and `ETH_HandleTypeDef` structures are defined\n   - Assumes callback functions (`HAL_ETH_RxLinkCallback`) are implemented elsewhere\n\n4. **Simulation Behavior**:\n   - Always simulates successful packet reception (returns `HAL_OK`)\n   - Uses reasonable default values for packet length (1500 bytes)\n   - Simulates timestamp values as zeros\n   - Maintains the same interface and return values as original\n\nThis replacement allows the Ethernet driver to function without hardware dependencies while preserving the essential data reception logic for upper-layer networking stacks.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 1884,
+          "prompt_tokens": 15545,
+          "total_tokens": 17429,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 14976
+          },
+          "prompt_cache_hit_tokens": 14976,
+          "prompt_cache_miss_tokens": 569
+        },
+        "model_provider": "deepseek",
+        "model_name": "deepseek-chat",
+        "system_fingerprint": "fp_eaab8d114b_prod0820_fp8_kvcache",
+        "id": "97d5f595-3d12-40cf-a010-43b3764242cf",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--019b35bb-01d0-7212-9a5c-60b326ab8b22-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 15545,
+        "output_tokens": 1884,
+        "total_tokens": 17429,
+        "input_token_details": {
+          "cache_read": 14976
+        },
+        "output_token_details": {}
+      }
+    }
+  ],
+  "final_response": {
+    "function_name": "HAL_ETH_ReadData",
+    "function_type": "RECV",
+    "functionality": "Reads received Ethernet packets from DMA descriptors and returns them to the application",
+    "classification_reason": "This is a core data reception function that: 1) Performs critical data I/O operations by reading received Ethernet packets from DMA descriptors, 2) Contains hardware-dependent polling loops waiting for DMA descriptor availability, 3) Processes DMA descriptor chain to reconstruct received packets, 4) Returns application buffer pointer through pAppBuff parameter, 5) Updates driver state structures and calls callback functions for upper-layer integration",
+    "has_replacement": true,
+    "function_replacement": "HAL_StatusTypeDef HAL_ETH_ReadData(ETH_HandleTypeDef *heth, void **pAppBuff)\n{\n  uint32_t descidx;\n  ETH_DMADescTypeDef *dmarxdesc;\n  uint32_t desccnt = 0U;\n  uint32_t desccntmax;\n  uint32_t bufflength;\n  uint8_t rxdataready = 0U;\n\n  if (pAppBuff == NULL)\n  {\n    heth->ErrorCode |= HAL_ETH_ERROR_PARAM;\n    return HAL_ERROR;\n  }\n\n  if (heth->gState != HAL_ETH_STATE_STARTED)\n  {\n    return HAL_ERROR;\n  }\n\n  descidx = heth->RxDescList.RxDescIdx;\n  dmarxdesc = (ETH_DMADescTypeDef *)heth->RxDescList.RxDesc[descidx];\n  desccntmax = ETH_RX_DESC_CNT - heth->RxDescList.RxBuildDescCnt;\n\n  /* [LOOP REMOVED] Original while loop polling DMA descriptor ownership */\n  /* Simulate receiving a packet by setting rxdataready to 1 */\n  rxdataready = 1U;\n  \n  /* Simulate descriptor processing for a complete packet */\n  if (rxdataready == 1U)\n  {\n    /* Simulate getting timestamp */\n    heth->RxDescList.TimeStamp.TimeStampHigh = 0; /* Simulated timestamp */\n    heth->RxDescList.TimeStamp.TimeStampLow = 0;  /* Simulated timestamp */\n    \n    /* Simulate frame length - use a reasonable default */\n    bufflength = 1500; /* Typical Ethernet MTU */\n    \n    /* Simulate first descriptor processing */\n    heth->RxDescList.RxDescCnt = 0;\n    heth->RxDescList.RxDataLength = 0;\n    \n    /* Simulate last descriptor */\n    heth->RxDescList.pRxLastRxDesc = 0; /* Simulated descriptor value */\n    \n    /* Simulate data linking - call callback with simulated data */\n    /* Use HAL_BE_ENET_ReadFrame to simulate receiving packet data */\n    uint8_t simulated_buffer[1500];\n    int received_len = HAL_BE_ENET_ReadFrame(simulated_buffer, sizeof(simulated_buffer));\n    \n    if (received_len > 0)\n    {\n      bufflength = (uint32_t)received_len;\n    }\n    \n    /* Call link callback with simulated data */\n#if (USE_HAL_ETH_REGISTER_CALLBACKS == 1)\n    /* Call registered Link callback */\n    heth->rxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\n                         simulated_buffer, bufflength);\n#else\n    /* Link callback */\n    HAL_ETH_RxLinkCallback(&heth->RxDescList.pRxStart, &heth->RxDescList.pRxEnd,\n                           simulated_buffer, (uint16_t)bufflength);\n#endif  /* USE_HAL_ETH_REGISTER_CALLBACKS */\n    \n    heth->RxDescList.RxDescCnt++;\n    heth->RxDescList.RxDataLength += bufflength;\n    \n    /* Clear buffer pointer */\n    dmarxdesc->BackupAddr0 = 0;\n    \n    /* Simulate descriptor index updates */\n    desccnt = 1U; /* Simulate processing one descriptor */\n  }\n\n  heth->RxDescList.RxBuildDescCnt += desccnt;\n  if ((heth->RxDescList.RxBuildDescCnt) != 0U)\n  {\n    /* [HARDWARE REMOVED] Skip descriptor update hardware operation */\n    /* ETH_UpdateDescriptor(heth); */\n  }\n\n  heth->RxDescList.RxDescIdx = descidx;\n\n  if (rxdataready == 1U)\n  {\n    /* Return received packet */\n    *pAppBuff = heth->RxDescList.pRxStart;\n    /* Reset first element */\n    heth->RxDescList.pRxStart = NULL;\n\n    return HAL_OK;\n  }\n\n  /* Packet not ready */\n  return HAL_ERROR;\n}"
+  }
+}
